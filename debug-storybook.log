@@ -1,0 +1,28 @@
+[01:01:13.782] [INFO] storybook v10.5.3
+[01:01:15.843] [DEBUG] Getting package.json info for D:/Projects/proof-runner-agent/product/proof-runner/package.json...
+[01:01:17.042] [DEBUG] Could not determine @babel/preset-env version in use. In case of runtime errors with @babel/preset-env, you may need to set the babelRemoveBugfixes feature flag in your `main.ts` file.
+[01:01:17.624] [WARN] 🚨 Unable to index files:
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--pass
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--fail
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--running
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--primary
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--secondary
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--ghost
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--disabled
+[01:01:17.630] [ERROR] Error: [38;2;241;97;97mUnable to index files:
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--pass
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--fail
+- ./src/components/Badge/Badge.stories.tsx,./src/components/ui/badge.stories.tsx: Duplicate stories with id: design-system-badge--running
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--primary
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--secondary
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--ghost
+- ./src/components/Button/Button.stories.tsx,./src/components/ui/button.stories.tsx: Duplicate stories with id: design-system-button--disabled[39m
+    at _StoryIndexGenerator.getIndexAndStats (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/core-server/index.js:19426:15)
+    at async _StoryIndexGenerator.getIndex (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/core-server/index.js:19405:13)
+    at async Object.experimental_serverChannel (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/@storybook/addon-vitest/dist/preset.js:463:14)
+    at async buildDevStandalone (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/core-server/index.js:11984:72)
+    at async withTelemetry (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/_node-chunks/chunk-YJQMIE5B.js:1785:12)
+    at async dev (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/bin/core.js:3850:3)
+    at async _Command.<anonymous> (file:///D:/Projects/proof-runner-agent/product/proof-runner/node_modules/storybook/dist/bin/core.js:3958:3)
+[01:01:17.634] [WARN] Broken build, fix the error above.
+You may need to refresh the browser.
