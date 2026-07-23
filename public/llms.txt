@@ -1,0 +1,22 @@
+# ProofRunner
+
+Independent execution verification for agent-generated software.
+
+## Core
+
+- Inspect repository: POST /api/inspect
+- Start verification: POST /api/verify
+- Run status: GET /api/runs/{id}
+- Receipt JSON: GET /api/receipts/{id}
+- Agent skill: /skill.md
+- Human interface: /
+- Example PASS receipt: /examples/passed
+- Example FAIL receipt: /examples/broken
+
+## MVP limitations
+
+- Public GitHub repositories only
+- Node.js and TypeScript only
+- npm and pnpm only
+- No repository secrets
+- No user-provided shell commands
