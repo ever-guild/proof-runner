@@ -1,5 +1,5 @@
 {
-  "name": "@proof-runner/web",
+  "name": "@ever-guild/proof-runner-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",

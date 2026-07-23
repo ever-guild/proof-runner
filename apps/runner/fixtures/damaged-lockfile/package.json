@@ -1,0 +1,8 @@
+{
+  "name": "@ever-guild/proof-runner-damaged-lockfile-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node -e \"process.exit(0)\""
+  }
+}

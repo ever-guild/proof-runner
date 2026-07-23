@@ -1,5 +1,5 @@
 {
-  "name": "@proof-runner/schema",
+  "name": "@ever-guild/proof-runner-schema",
   "version": "1.0.0",
   "private": true,
   "type": "module",
