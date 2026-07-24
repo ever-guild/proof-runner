@@ -1,0 +1,15 @@
+{
+  "contractVersion": "1.0",
+  "operation": "inspect_repository",
+  "result": { "contractVersion": "1.0", "supported": true, "inspection": {
+    "repositoryUrl": "https://github.com/ever-guild/proof-runner",
+    "requestedRef": { "type": "branch", "value": "main" },
+    "resolvedCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "packageManager": "pnpm",
+    "lockfile": "pnpm-lock.yaml",
+    "nodeVersion": ">=22",
+    "hasTypeScript": true,
+    "scripts": { "build": "vite build", "test": "vitest run" },
+    "selectedSkill": "node-typescript@1"
+  } }
+}

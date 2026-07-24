@@ -69,6 +69,14 @@ const setup = async () => {
 const post = async (base: string, path: string, body: unknown, headers: Record<string, string> = {}) => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
 describe("inspection and run orchestration", () => {
+  it("serves unauthenticated liveness and persistent-store readiness probes", async () => {
+    const api = await setup();
+    try {
+      expect(await (await fetch(`${api.base}/health/live`)).json()).toEqual({ status: "live" });
+      expect(await (await fetch(`${api.base}/health/ready`)).json()).toEqual({ status: "ready" });
+    } finally { await api.close(); }
+  });
+
   it("upgrades an existing 001 persistent volume before using orchestration columns", () => {
     const directory = mkdtempSync(join(tmpdir(), "proof-runner-upgrade-")); directories.push(directory);
     const path = join(directory, "runs.sqlite");
@@ -85,6 +93,20 @@ describe("inspection and run orchestration", () => {
   it("inspects committed metadata without executing a repository", async () => {
     const service = new InspectionService(gateway);
     await expect(service.inspect("https://github.com/acme/example", { type: "branch", value: "main" })).resolves.toMatchObject({ supported: true, inspection: { resolvedCommitSha: sha, packageManager: "pnpm", hasTypeScript: true, selectedSkill: "node-typescript@1" } });
+  });
+
+  it("serves the free A2MCP inspection and verification contracts with HTTP 200", async () => {
+    const api = await setup();
+    try {
+      const inspected = await post(api.base, "/a2mcp/inspect_repository", {
+        contractVersion: CONTRACT_VERSION, repositoryUrl: request.repositoryUrl, ref: request.resolvedRef,
+      });
+      expect(inspected.status).toBe(200);
+      expect(await inspected.json()).toMatchObject({ operation: "inspect_repository", result: { supported: true } });
+      const verified = await post(api.base, "/a2mcp/verify_repository", { ...request, idempotencyKey: "a2mcp-key" });
+      expect(verified.status).toBe(200);
+      expect(await verified.json()).toMatchObject({ operation: "verify_repository", result: { status: expect.stringMatching(/^(QUEUED|RUNNING)$/) } });
+    } finally { await api.close(); }
   });
 
   it("enforces idempotency and a one-active/five-waiting FIFO queue", async () => {

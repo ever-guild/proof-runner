@@ -1,0 +1,108 @@
+name: proof-runner
+
+services:
+  edge:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      PROOF_RUNNER_DOMAIN: ${PROOF_RUNNER_DOMAIN:?set the public HTTPS domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, backend]
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health/ready | grep -qx ready"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [backend]
+
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      DATABASE_PATH: /var/lib/proof-runner/runs.sqlite
+      PROOF_RUNNER_RUNNER_URL: http://runner:8788
+      PROOF_RUNNER_BEARER_TOKEN: ${PROOF_RUNNER_BEARER_TOKEN:?provision a deployment-scoped token}
+      PROOF_RUNNER_RECEIPT_KEY_ID: ${PROOF_RUNNER_RECEIPT_KEY_ID:?set a receipt key id}
+      PROOF_RUNNER_RECEIPT_PRIVATE_KEY: ${PROOF_RUNNER_RECEIPT_PRIVATE_KEY:?provision the receipt signing key}
+      PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS: ${PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS:-[]}
+    volumes:
+      - proof_runner_data:/var/lib/proof-runner
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8787/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [backend]
+
+  runner:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.runner
+    restart: unless-stopped
+    environment:
+      PROOF_RUNNER_HOST: 0.0.0.0
+      PROOF_RUNNER_PORT: 8788
+      PROOF_RUNNER_API_URL: http://api:8787
+      PROOF_RUNNER_BEARER_TOKEN: ${PROOF_RUNNER_BEARER_TOKEN:?provision a deployment-scoped token}
+      PROOF_RUNNER_RUNTIME_IMAGE: ${PROOF_RUNNER_RUNTIME_IMAGE:-proof-runner-node:1}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8788/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [backend]
+
+  backup:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_PATH: /var/lib/proof-runner/runs.sqlite
+      BACKUP_DIRECTORY: /backups
+      BACKUP_RETENTION_DAYS: ${PROOF_RUNNER_BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${PROOF_RUNNER_BACKUP_INTERVAL_SECONDS:-86400}
+    command: ["/bin/sh", "-ec", "while :; do node /usr/local/bin/backup-sqlite.mjs; sleep \"$${BACKUP_INTERVAL_SECONDS}\"; done"]
+    volumes:
+      - proof_runner_data:/var/lib/proof-runner:ro
+      - ${PROOF_RUNNER_BACKUP_PATH:?set an encrypted host/provider backup path}:/backups
+    networks: [backend]
+
+networks:
+  edge: {}
+  backend:
+    internal: true
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  proof_runner_data: {}

@@ -2,10 +2,13 @@ import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   CONTRACT_VERSION,
+  InspectRepositoryA2McpRequestSchema,
   InspectRequestSchema,
   InternalHeartbeatRequestSchema,
   InternalResultDeliveryRequestSchema,
+  VerifyRepositoryA2McpRequestSchema,
   VerifyRequestSchema,
+  type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
 import { InspectionService } from "./inspection.js";
 import { Orchestrator } from "./orchestration.js";
@@ -48,24 +51,60 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
     const expected = Buffer.from(dependencies.bearerToken);
     return supplied !== null && supplied.length === expected.length && timingSafeEqual(supplied, expected);
   };
+  const startVerification = (idempotencyKey: string, body: VerifyRequest) => {
+    const created = dependencies.store.create(idempotencyKey, body);
+    if (created.kind === "conflict") return { error: [409, "IDEMPOTENCY_KEY_CONFLICT", "Idempotency-Key was used with a different request."] as const };
+    if (created.kind === "full") return { error: [429, "RUN_QUEUE_FULL", "The run queue is full."] as const };
+    void dependencies.orchestrator.dispatchNext();
+    return { run: dependencies.store.get(created.run.response.id)!.response, replayed: created.kind === "replayed", created: created.kind === "created" };
+  };
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://api.internal");
     try {
+      if (request.method === "GET" && url.pathname === "/health/live") {
+        return send(response, 200, { status: "live" });
+      }
+      if (request.method === "GET" && url.pathname === "/health/ready") {
+        return dependencies.store.isReady()
+          ? send(response, 200, { status: "ready" })
+          : publicError(response, 503, "NOT_READY", "The service is not ready.", true);
+      }
       if (request.method === "POST" && url.pathname === "/api/inspect") {
         const body = parse(InspectRequestSchema, await readJson(request));
         if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the inspection contract.");
         return send(response, 200, await dependencies.inspection.inspect(body.repositoryUrl, body.ref));
+      }
+      if (request.method === "POST" && url.pathname === "/a2mcp/inspect_repository") {
+        const body = parse(InspectRepositoryA2McpRequestSchema, await readJson(request));
+        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the inspection contract.");
+        return send(response, 200, { contractVersion: CONTRACT_VERSION, operation: "inspect_repository", result: await dependencies.inspection.inspect(body.repositoryUrl, body.ref) });
       }
       if (request.method === "POST" && url.pathname === "/api/verify") {
         const key = request.headers["idempotency-key"];
         if (typeof key !== "string" || !key.trim() || key.length > 255) return publicError(response, 400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required.");
         const body = parse(VerifyRequestSchema, await readJson(request));
         if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the verification contract.");
-        const created = dependencies.store.create(key, body);
-        if (created.kind === "conflict") return publicError(response, 409, "IDEMPOTENCY_KEY_CONFLICT", "Idempotency-Key was used with a different request.");
-        if (created.kind === "full") return send(response, 429, { contractVersion: CONTRACT_VERSION, error: { code: "RUN_QUEUE_FULL", message: "The run queue is full.", retryable: true, capacity: { active: 1, waiting: 5 } } });
-        void dependencies.orchestrator.dispatchNext();
-        return send(response, created.kind === "created" ? 202 : 200, { contractVersion: CONTRACT_VERSION, run: dependencies.store.get(created.run.response.id)!.response, replayed: created.kind === "replayed" });
+        const started = startVerification(key, body);
+        if ("error" in started) {
+          const [status, code, message] = started.error;
+          return code === "RUN_QUEUE_FULL"
+            ? send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message: "The run queue is full.", retryable: true, capacity: { active: 1, waiting: 5 } } })
+            : publicError(response, status, code, message);
+        }
+        return send(response, started.created ? 202 : 200, { contractVersion: CONTRACT_VERSION, run: started.run, replayed: started.replayed });
+      }
+      if (request.method === "POST" && url.pathname === "/a2mcp/verify_repository") {
+        const body = parse(VerifyRepositoryA2McpRequestSchema, await readJson(request));
+        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the verification contract.");
+        const { idempotencyKey, ...verifyRequest } = body;
+        const started = startVerification(idempotencyKey, verifyRequest);
+        if ("error" in started) {
+          const [status, code, message] = started.error;
+          return code === "RUN_QUEUE_FULL"
+            ? send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message, retryable: true, capacity: { active: 1, waiting: 5 } } })
+            : publicError(response, status, code, message);
+        }
+        return send(response, 200, { contractVersion: CONTRACT_VERSION, operation: "verify_repository", result: started.run });
       }
       const publicRun = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
       if (request.method === "GET" && publicRun) {

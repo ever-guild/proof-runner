@@ -1,3 +1,5 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   CONTRACT_VERSION,
@@ -85,15 +87,49 @@ export type RunnerHttpServer = ReturnType<typeof createServer> & {
   service: RunnerService;
 };
 
+export interface RunnerReadiness {
+  isReady(): Promise<boolean>;
+}
+
+const execFile = promisify(execFileCallback);
+
+export const createRunnerReadiness = (config: RunnerConfig): RunnerReadiness => ({
+  async isReady(): Promise<boolean> {
+    try {
+      await execFile("docker", ["image", "inspect", config.runtimeImage], { timeout: 3_000 });
+      const callbackUrl = new URL("/health/ready", config.apiCallbackUrl!);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3_000);
+      try {
+        return (await fetch(callbackUrl, { signal: controller.signal })).ok;
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      return false;
+    }
+  },
+});
+
 export const createRunnerServer = (
   config = loadRunnerConfig(),
   service = new RunnerService(config),
+  readiness = createRunnerReadiness(config),
 ): RunnerHttpServer => {
   if (!config.apiCallbackUrl) throw new Error("PROOF_RUNNER_API_URL is required when starting the runner server");
   const server = createServer(async (request, response) => {
     try {
-      service.authenticate(request.headers.authorization);
       const url = new URL(request.url ?? "/", "http://runner.internal");
+      if (request.method === "GET" && url.pathname === "/health/live") {
+        json(response, 200, { status: "live" });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/health/ready") {
+        const ready = await readiness.isReady();
+        json(response, ready ? 200 : 503, { status: ready ? "ready" : "not_ready" });
+        return;
+      }
+      service.authenticate(request.headers.authorization);
       if (request.method === "POST" && url.pathname === "/internal/v1/runs") {
         const body = versionAwareParse(
           InternalDispatchRequestSchema,

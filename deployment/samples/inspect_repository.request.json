@@ -1,0 +1,5 @@
+{
+  "contractVersion": "1.0",
+  "repositoryUrl": "https://github.com/ever-guild/proof-runner",
+  "ref": { "type": "branch", "value": "main" }
+}

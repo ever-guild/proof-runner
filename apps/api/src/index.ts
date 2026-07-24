@@ -12,12 +12,23 @@ export { HttpRunnerClient, Orchestrator } from "./orchestration.js";
 export { createApiServer } from "./server.js";
 export { RunStore } from "./store.js";
 
+const isInternalServiceUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return true;
+    if (url.protocol !== "http:") return false;
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || !url.hostname.includes(".");
+  } catch {
+    return false;
+  }
+};
+
 export const createProductionApi = (env: NodeJS.ProcessEnv = process.env) => {
   const receiptConfig = loadReceiptApiConfig(env);
   const token = env.PROOF_RUNNER_BEARER_TOKEN;
   const runnerUrl = env.PROOF_RUNNER_RUNNER_URL;
   if (!token || token.length < 32) throw new Error("PROOF_RUNNER_BEARER_TOKEN must contain at least 32 characters");
-  if (!runnerUrl?.startsWith("https://") && !runnerUrl?.startsWith("http://127.0.0.1:")) throw new Error("PROOF_RUNNER_RUNNER_URL must be an internal HTTP(S) URL");
+  if (!runnerUrl || !isInternalServiceUrl(runnerUrl)) throw new Error("PROOF_RUNNER_RUNNER_URL must be an internal HTTP(S) URL");
   const store = new RunStore(receiptConfig.databasePath);
   const receipts = new ReceiptService({ keyId: receiptConfig.keyId, privateKeyPem: receiptConfig.privateKeyPem }, new ReceiptStore(receiptConfig.databasePath), receiptConfig.verificationKeys);
   const orchestrator = new Orchestrator(store, new HttpRunnerClient(runnerUrl, token), receipts.signer);
@@ -28,5 +39,5 @@ export const createProductionApi = (env: NodeJS.ProcessEnv = process.env) => {
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file:").href) {
   const api = createProductionApi();
   api.orchestrator.start();
-  api.server.listen(process.env.PORT ? Number(process.env.PORT) : 8787, "127.0.0.1");
+  api.server.listen(process.env.PORT ? Number(process.env.PORT) : 8787, process.env.HOST ?? "127.0.0.1");
 }

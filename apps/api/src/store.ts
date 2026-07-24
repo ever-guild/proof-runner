@@ -141,6 +141,10 @@ export class RunStore {
 
   close(): void { this.database.close(); }
 
+  isReady(): boolean {
+    return this.database.prepare("SELECT 1 AS ready").get() !== undefined;
+  }
+
   private inflate(row: RunRow): StoredRun {
     const checks = this.database.prepare("SELECT * FROM normalized_checks WHERE run_id = ? ORDER BY check_index").all(row.id) as Array<{
       check_id: string; stage: NormalizedCheck["stage"]; title: string; outcome: NormalizedCheck["outcome"]; started_at: string | null; completed_at: string | null; duration_ms: number | null; exit_code: number | null; summary: string;
