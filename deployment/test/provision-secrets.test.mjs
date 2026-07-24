@@ -136,6 +136,20 @@ test("init creates exclusive files with safe modes, a 48-byte token, and matchin
   );
 });
 
+test("init leaves every operator-owned production value unfilled", () => {
+  const directory = mkdtempSync(join(tmpdir(), "proof-runner-secrets-"));
+  const envFile = join(directory, ".env.production");
+  const publicKeyFile = join(directory, "receipt-public.pem");
+  initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-raw" });
+  const environment = parseDotenv(readFileSync(envFile, "utf8"));
+  assert.equal(environment.PROOF_RUNNER_DOMAIN, "");
+  assert.equal(environment.PROOF_RUNNER_RUNTIME_IMAGE, "");
+  assert.equal(environment.OKX_API_KEY, "");
+  assert.equal(environment.OKX_SECRET_KEY, "");
+  assert.equal(environment.OKX_PASSPHRASE, "");
+  assert.equal(environment.PAY_TO_ADDRESS, "");
+});
+
 test("init rejects a public-key path that would collide with the env file", () => {
   const directory = mkdtempSync(join(tmpdir(), "proof-runner-secrets-"));
   const envFile = join(directory, ".env.production");
