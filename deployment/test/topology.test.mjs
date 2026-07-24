@@ -25,9 +25,12 @@ test("nginx config routes SPA fallback for human users, proxies bot crawlers to 
   assert.match(nginx, /proxy_pass http:\/\/api:8787;/);
   assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\//);
   assert.match(nginx, /facebookexternalhit\|twitterbot\|slackbot\|linkedinbot\|bot\|crawler\|spider/);
+  assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\/[\s\S]*?proxy_set_header Host \$host;/);
   assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html;/);
   assert.doesNotMatch(nginx, /location \/internal\//);
   assert.doesNotMatch(nginx, /proxy_pass http:\/\/api:8787\/internal\//);
+  assert.match(nginx, /location = \/internal\s*\{\s*return 404;\s*\}/);
+  assert.match(nginx, /location \^~ \/internal\/\s*\{\s*return 404;\s*\}/);
 });
 
 
