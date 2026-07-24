@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
+import type { ReceiptService } from "@ever-guild/proof-runner-receipt";
 import {
   CONTRACT_VERSION,
   InspectRepositoryA2McpRequestSchema,
@@ -10,7 +11,7 @@ import {
   VerifyRequestSchema,
   type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
-import { InspectionService } from "./inspection.js";
+import { InspectionService, InspectionUnavailableError } from "./inspection.js";
 import { Orchestrator } from "./orchestration.js";
 import {
   InvalidJsonBodyError,
@@ -19,44 +20,120 @@ import {
 } from "./request-body.js";
 import { RunStore } from "./store.js";
 
-const send = (response: ServerResponse, status: number, payload: unknown): void => {
-  const body = JSON.stringify(payload);
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "no-store" });
-  response.end(body);
-};
-const publicError = (response: ServerResponse, status: number, code: string, message: string, retryable = false): void => send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message, retryable } });
-const parse = <T>(schema: { safeParse(value: unknown): { success: boolean; data?: T } }, body: unknown): T | null => {
-  if (typeof body === "object" && body !== null && "contractVersion" in body && body.contractVersion !== CONTRACT_VERSION) return null;
-  const result = schema.safeParse(body); return result.success ? result.data! : null;
-};
-
 export interface ApiServerDependencies {
   store: RunStore;
   inspection: InspectionService;
   orchestrator: Orchestrator;
   bearerToken: string;
-  receiptReader?: {
-    get(id: string): { receipt: unknown } | null;
-    publicKey(keyId: string): unknown | null;
-    verify(receipt: unknown): unknown;
-  };
+  receipts?: Pick<ReceiptService, "get" | "publicKey" | "verify">;
 }
 
+const send = (response: ServerResponse, status: number, payload: unknown): void => {
+  const body = JSON.stringify(payload);
+  response.writeHead(status, {
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(body),
+    "content-type": "application/json; charset=utf-8",
+  });
+  response.end(body);
+};
+
+const publicError = (
+  response: ServerResponse,
+  status: number,
+  code:
+    | "INVALID_REQUEST"
+    | "IDEMPOTENCY_KEY_REQUIRED"
+    | "IDEMPOTENCY_KEY_CONFLICT"
+    | "RUN_NOT_FOUND"
+    | "RECEIPT_NOT_FOUND"
+    | "REQUEST_BODY_TOO_LARGE"
+    | "NOT_READY"
+    | "INTERNAL_ERROR",
+  message: string,
+  retryable = false,
+): void => {
+  send(response, status, {
+    contractVersion: CONTRACT_VERSION,
+    error: { code, message, retryable },
+  });
+};
+
+const internalError = (
+  response: ServerResponse,
+  status: number,
+  code:
+    | "UNAUTHORIZED"
+    | "INVALID_REQUEST"
+    | "RUN_NOT_FOUND"
+    | "LEASE_EXPIRED"
+    | "RESULT_CONFLICT"
+    | "INTERNAL_ERROR",
+  message: string,
+  retryable = false,
+): void => {
+  send(response, status, {
+    contractVersion: CONTRACT_VERSION,
+    error: { code, message, retryable },
+  });
+};
+
+const queueFull = (response: ServerResponse): void => {
+  send(response, 429, {
+    contractVersion: CONTRACT_VERSION,
+    error: {
+      code: "RUN_QUEUE_FULL",
+      message: "The run queue is full.",
+      retryable: true,
+      capacity: { active: 1, waiting: 5 },
+    },
+  });
+};
+
+const parse = <T>(
+  schema: { safeParse(value: unknown): { success: boolean; data?: T } },
+  candidate: unknown,
+): T | null => {
+  const parsed = schema.safeParse(candidate);
+  return parsed.success && parsed.data !== undefined ? parsed.data : null;
+};
+
+const authenticated = (header: string | undefined, expected: string): boolean => {
+  if (!header?.startsWith("Bearer ")) return false;
+  const supplied = Buffer.from(header.slice("Bearer ".length));
+  const token = Buffer.from(expected);
+  return supplied.byteLength === token.byteLength && timingSafeEqual(supplied, token);
+};
+
+const decodePathSegment = (value: string): string | null => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+};
+
 export const createApiServer = (dependencies: ApiServerDependencies) => {
-  const authenticated = (header: string | undefined): boolean => {
-    const supplied = header?.startsWith("Bearer ") ? Buffer.from(header.slice(7)) : null;
-    const expected = Buffer.from(dependencies.bearerToken);
-    return supplied !== null && supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  const startVerification = (
+    idempotencyKey: string,
+    request: VerifyRequest,
+  ) => {
+    const created = dependencies.store.create(idempotencyKey, request);
+    if (created.kind === "created" || created.kind === "replayed") {
+      void dependencies.orchestrator.dispatchNext();
+    }
+    return created;
   };
-  const startVerification = (idempotencyKey: string, body: VerifyRequest) => {
-    const created = dependencies.store.create(idempotencyKey, body);
-    if (created.kind === "conflict") return { error: [409, "IDEMPOTENCY_KEY_CONFLICT", "Idempotency-Key was used with a different request."] as const };
-    if (created.kind === "full") return { error: [429, "RUN_QUEUE_FULL", "The run queue is full."] as const };
-    void dependencies.orchestrator.dispatchNext();
-    return { run: dependencies.store.get(created.run.response.id)!.response, replayed: created.kind === "replayed", created: created.kind === "created" };
-  };
+
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://api.internal");
+    const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
+    const receiptMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)$/);
+    const receiptKeyMatch = url.pathname.match(/^\/api\/receipt-keys\/([^/]+)$/);
+    const callbackMatch = url.pathname.match(
+      /^\/internal\/v1\/runs\/([^/]+)\/(heartbeat|result)$/,
+    );
+
     try {
       if (request.method === "GET" && url.pathname === "/health/live") {
         return send(response, 200, { status: "live" });
@@ -64,91 +141,329 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
       if (request.method === "GET" && url.pathname === "/health/ready") {
         return dependencies.store.isReady()
           ? send(response, 200, { status: "ready" })
-          : publicError(response, 503, "NOT_READY", "The service is not ready.", true);
+          : publicError(
+              response,
+              503,
+              "NOT_READY",
+              "The service is not ready.",
+              true,
+            );
       }
+
       if (request.method === "POST" && url.pathname === "/api/inspect") {
         const body = parse(InspectRequestSchema, await readJson(request));
-        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the inspection contract.");
-        return send(response, 200, await dependencies.inspection.inspect(body.repositoryUrl, body.ref));
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the inspection contract.",
+          );
+        }
+        return send(
+          response,
+          200,
+          await dependencies.inspection.inspect(body.repositoryUrl, body.ref),
+        );
       }
+
       if (request.method === "POST" && url.pathname === "/a2mcp/inspect_repository") {
-        const body = parse(InspectRepositoryA2McpRequestSchema, await readJson(request));
-        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the inspection contract.");
-        return send(response, 200, { contractVersion: CONTRACT_VERSION, operation: "inspect_repository", result: await dependencies.inspection.inspect(body.repositoryUrl, body.ref) });
+        const body = parse(
+          InspectRepositoryA2McpRequestSchema,
+          await readJson(request),
+        );
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the inspection contract.",
+          );
+        }
+        return send(response, 200, {
+          contractVersion: CONTRACT_VERSION,
+          operation: "inspect_repository",
+          result: await dependencies.inspection.inspect(body.repositoryUrl, body.ref),
+        });
       }
+
       if (request.method === "POST" && url.pathname === "/api/verify") {
-        const key = request.headers["idempotency-key"];
-        if (typeof key !== "string" || !key.trim() || key.length > 255) return publicError(response, 400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required.");
+        const idempotencyKey = request.headers["idempotency-key"];
+        if (
+          typeof idempotencyKey !== "string" ||
+          !idempotencyKey.trim() ||
+          idempotencyKey.length > 255
+        ) {
+          return publicError(
+            response,
+            400,
+            "IDEMPOTENCY_KEY_REQUIRED",
+            "Idempotency-Key is required.",
+          );
+        }
+
         const body = parse(VerifyRequestSchema, await readJson(request));
-        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the verification contract.");
-        const started = startVerification(key, body);
-        if ("error" in started) {
-          const [status, code, message] = started.error;
-          return code === "RUN_QUEUE_FULL"
-            ? send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message: "The run queue is full.", retryable: true, capacity: { active: 1, waiting: 5 } } })
-            : publicError(response, status, code, message);
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the verification contract.",
+          );
         }
-        return send(response, started.created ? 202 : 200, { contractVersion: CONTRACT_VERSION, run: started.run, replayed: started.replayed });
+
+        const created = startVerification(idempotencyKey, body);
+        if (created.kind === "conflict") {
+          return publicError(
+            response,
+            409,
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key was used with a different request.",
+          );
+        }
+        if (created.kind === "full") return queueFull(response);
+
+        const current = dependencies.store.get(created.run.response.id) ?? created.run;
+        return send(response, created.kind === "created" ? 202 : 200, {
+          contractVersion: CONTRACT_VERSION,
+          run: current.response,
+          replayed: created.kind === "replayed",
+        });
       }
+
       if (request.method === "POST" && url.pathname === "/a2mcp/verify_repository") {
-        const body = parse(VerifyRepositoryA2McpRequestSchema, await readJson(request));
-        if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the verification contract.");
+        const body = parse(
+          VerifyRepositoryA2McpRequestSchema,
+          await readJson(request),
+        );
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the verification contract.",
+          );
+        }
         const { idempotencyKey, ...verifyRequest } = body;
-        const started = startVerification(idempotencyKey, verifyRequest);
-        if ("error" in started) {
-          const [status, code, message] = started.error;
-          return code === "RUN_QUEUE_FULL"
-            ? send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message, retryable: true, capacity: { active: 1, waiting: 5 } } })
-            : publicError(response, status, code, message);
+        const created = startVerification(idempotencyKey, verifyRequest);
+        if (created.kind === "conflict") {
+          return publicError(
+            response,
+            409,
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key was used with a different request.",
+          );
         }
-        return send(response, 200, { contractVersion: CONTRACT_VERSION, operation: "verify_repository", result: started.run });
+        if (created.kind === "full") return queueFull(response);
+
+        const current = dependencies.store.get(created.run.response.id) ?? created.run;
+        return send(response, 200, {
+          contractVersion: CONTRACT_VERSION,
+          operation: "verify_repository",
+          result: current.response,
+        });
       }
-      const publicRun = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
-      if (request.method === "GET" && publicRun) {
-        const run = dependencies.store.get(decodeURIComponent(publicRun[1] ?? ""));
-        return run ? send(response, 200, run.response) : publicError(response, 404, "RUN_NOT_FOUND", "Run was not found.");
+
+      if (request.method === "GET" && runMatch) {
+        const runId = decodePathSegment(runMatch[1] ?? "");
+        if (runId === null) {
+          return publicError(response, 400, "INVALID_REQUEST", "Run ID is invalid.");
+        }
+        const run = dependencies.store.get(runId);
+        if (!run) {
+          return publicError(response, 404, "RUN_NOT_FOUND", "Run was not found.");
+        }
+        return send(response, 200, run.response);
       }
-      const receipt = url.pathname.match(/^\/api\/receipts\/([^/]+)$/);
-      if (request.method === "GET" && receipt) {
-        const stored = dependencies.receiptReader?.get(decodeURIComponent(receipt[1] ?? ""));
-        return stored ? send(response, 200, stored.receipt) : publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt was not found.");
+
+      if (request.method === "GET" && receiptMatch) {
+        const receiptId = decodePathSegment(receiptMatch[1] ?? "");
+        if (receiptId === null) {
+          return publicError(response, 400, "INVALID_REQUEST", "Receipt ID is invalid.");
+        }
+        const receipt = dependencies.receipts?.get(receiptId);
+        if (!receipt) {
+          return publicError(
+            response,
+            404,
+            "RECEIPT_NOT_FOUND",
+            "Receipt was not found.",
+          );
+        }
+        return send(response, 200, receipt.receipt);
       }
-      const receiptKey = url.pathname.match(/^\/api\/receipt-keys\/([^/]+)$/);
-      if (request.method === "GET" && receiptKey) {
-        const key = dependencies.receiptReader?.publicKey(decodeURIComponent(receiptKey[1] ?? ""));
-        return key ? send(response, 200, key) : publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt key was not found.");
+
+      if (request.method === "GET" && receiptKeyMatch) {
+        const keyId = decodePathSegment(receiptKeyMatch[1] ?? "");
+        if (keyId === null) {
+          return publicError(response, 400, "INVALID_REQUEST", "Receipt key ID is invalid.");
+        }
+        const key = dependencies.receipts?.publicKey(keyId);
+        if (!key) {
+          return publicError(
+            response,
+            404,
+            "RECEIPT_NOT_FOUND",
+            "Receipt key was not found.",
+          );
+        }
+        return send(response, 200, key);
       }
+
       if (request.method === "POST" && url.pathname === "/api/receipts/verify") {
-        if (!dependencies.receiptReader) return publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt service is not configured.");
-        return send(response, 200, dependencies.receiptReader.verify(await readJson(request)));
-      }
-      const callback = url.pathname.match(/^\/internal\/v1\/runs\/([^/]+)\/(heartbeat|result)$/);
-      if (callback) {
-        if (!authenticated(request.headers.authorization)) return publicError(response, 401, "UNAUTHORIZED", "Internal authentication is required.");
-        const runId = decodeURIComponent(callback[1] ?? "");
-        if (callback[2] === "heartbeat" && request.method === "POST") {
-          const body = parse(InternalHeartbeatRequestSchema, await readJson(request));
-          if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the internal contract.");
-          const leaseExpiresAt = dependencies.orchestrator.heartbeat(runId, body.leaseId, body.activeStage);
-          return leaseExpiresAt
-            ? send(response, 200, { contractVersion: CONTRACT_VERSION, lease: { leaseId: body.leaseId, leaseExpiresAt }, cancellationRequested: false })
-            : publicError(response, 409, "LEASE_EXPIRED", "Run lease is no longer active.");
+        if (!dependencies.receipts) {
+          return publicError(
+            response,
+            404,
+            "RECEIPT_NOT_FOUND",
+            "Receipt verification is not configured.",
+          );
         }
-        if (callback[2] === "result" && request.method === "PUT") {
-          const body = parse(InternalResultDeliveryRequestSchema, await readJson(request));
-          if (!body) return publicError(response, 400, "INVALID_REQUEST", "Request does not match the internal contract.");
-          return await dependencies.orchestrator.result(runId, body)
-            ? send(response, 200, { contractVersion: CONTRACT_VERSION, runId, accepted: true })
-            : publicError(response, 409, "LEASE_EXPIRED", "Run lease is no longer active.");
+        return send(response, 200, dependencies.receipts.verify(await readJson(request)));
+      }
+
+      if (callbackMatch) {
+        if (!authenticated(request.headers.authorization, dependencies.bearerToken)) {
+          return internalError(
+            response,
+            401,
+            "UNAUTHORIZED",
+            "Internal authentication is required.",
+          );
+        }
+        const runId = decodePathSegment(callbackMatch[1] ?? "");
+        if (runId === null) {
+          return internalError(response, 400, "INVALID_REQUEST", "Run ID is invalid.");
+        }
+
+        if (callbackMatch[2] === "heartbeat" && request.method === "POST") {
+          const body = parse(
+            InternalHeartbeatRequestSchema,
+            await readJson(request),
+          );
+          if (!body) {
+            return internalError(
+              response,
+              400,
+              "INVALID_REQUEST",
+              "Request does not match the internal contract.",
+            );
+          }
+          const outcome = dependencies.orchestrator.heartbeat(
+            runId,
+            body.leaseId,
+            body.activeStage,
+          );
+          if (outcome.kind === "RUN_NOT_FOUND") {
+            return internalError(response, 404, "RUN_NOT_FOUND", "Run was not found.");
+          }
+          if (outcome.kind === "LEASE_EXPIRED") {
+            return internalError(
+              response,
+              409,
+              "LEASE_EXPIRED",
+              "Run lease is no longer active.",
+            );
+          }
+          return send(response, 200, {
+            contractVersion: CONTRACT_VERSION,
+            lease: { leaseId: body.leaseId, leaseExpiresAt: outcome.leaseExpiresAt },
+            cancellationRequested: false,
+          });
+        }
+
+        if (callbackMatch[2] === "result" && request.method === "PUT") {
+          const body = parse(
+            InternalResultDeliveryRequestSchema,
+            await readJson(request),
+          );
+          if (!body) {
+            return internalError(
+              response,
+              400,
+              "INVALID_REQUEST",
+              "Request does not match the internal contract.",
+            );
+          }
+          const outcome = await dependencies.orchestrator.result(runId, body);
+          if (outcome !== "ACCEPTED") {
+            if (outcome === "RUN_NOT_FOUND") {
+              return internalError(response, 404, "RUN_NOT_FOUND", "Run was not found.");
+            }
+            return internalError(
+              response,
+              409,
+              outcome,
+              outcome === "RESULT_CONFLICT"
+                ? "A different terminal result is already stored."
+                : "Run lease is no longer active.",
+            );
+          }
+          return send(response, 200, {
+            contractVersion: CONTRACT_VERSION,
+            runId,
+            accepted: true,
+          });
         }
       }
+
       return publicError(response, 404, "INVALID_REQUEST", "Route was not found.");
     } catch (error) {
+      const internalRoute = url.pathname.startsWith("/internal/v1/");
       if (error instanceof RequestBodyTooLargeError) {
-        return publicError(response, 413, "REQUEST_BODY_TOO_LARGE", "Request body exceeds the 1 MiB limit.");
+        return internalRoute
+          ? internalError(
+              response,
+              413,
+              "INVALID_REQUEST",
+              "Request body exceeds the 1 MiB limit.",
+            )
+          : publicError(
+              response,
+              413,
+              "REQUEST_BODY_TOO_LARGE",
+              "Request body exceeds the 1 MiB limit.",
+            );
       }
-      if (error instanceof InvalidJsonBodyError) return publicError(response, 400, "INVALID_REQUEST", "Request body must be valid JSON.");
-      return publicError(response, 500, "INTERNAL_ERROR", "The service could not process this request.", true);
+      if (error instanceof InvalidJsonBodyError) {
+        return internalRoute
+          ? internalError(
+              response,
+              400,
+              "INVALID_REQUEST",
+              "Request body must be valid JSON.",
+            )
+          : publicError(
+              response,
+              400,
+              "INVALID_REQUEST",
+              "Request body must be valid JSON.",
+            );
+      }
+      if (error instanceof InspectionUnavailableError) {
+        return publicError(
+          response,
+          503,
+          "INTERNAL_ERROR",
+          "Repository metadata is temporarily unavailable.",
+          true,
+        );
+      }
+      return internalRoute
+        ? internalError(
+            response,
+            500,
+            "INTERNAL_ERROR",
+            "The API could not process this request.",
+            true,
+          )
+        : publicError(
+            response,
+            500,
+            "INTERNAL_ERROR",
+            "The API could not process this request.",
+            true,
+          );
     }
   });
 };
