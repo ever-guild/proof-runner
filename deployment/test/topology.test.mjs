@@ -23,11 +23,27 @@ test("nginx config routes SPA fallback for human users, proxies bot crawlers to 
   const nginx = await read("nginx.conf");
   assert.match(nginx, /location \/api\//);
   assert.match(nginx, /proxy_pass http:\/\/api:8787;/);
+  assert.match(nginx, /proxy_set_header X-Forwarded-Host \$http_host;/);
+  assert.match(nginx, /proxy_set_header X-Forwarded-Proto \$scheme;/);
   assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\//);
   assert.match(nginx, /facebookexternalhit\|twitterbot\|slackbot\|linkedinbot\|bot\|crawler\|spider/);
   assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html;/);
   assert.doesNotMatch(nginx, /location \/internal\//);
   assert.doesNotMatch(nginx, /proxy_pass http:\/\/api:8787\/internal\//);
+});
+
+test("negative edge probe verifies public edge rejects and never proxies /internal/ callback routes to upstream API", async () => {
+  const nginx = await read("nginx.conf");
+  const caddyfile = await read("Caddyfile");
+
+  assert.match(caddyfile, /@api path \/api\/\* \/a2mcp\/\* \/health\/\*/);
+  assert.doesNotMatch(caddyfile, /\/internal\//);
+
+  assert.doesNotMatch(nginx, /location.*\/internal/);
+  assert.doesNotMatch(nginx, /proxy_pass.*\/internal/);
+
+  const hasInternalProxy = /\n\s*location\s+[^\{]*\/internal[^\}]*proxy_pass/m.test(nginx);
+  assert.equal(hasInternalProxy, false, "Public edge proxy must not contain any location proxying /internal/");
 });
 
 

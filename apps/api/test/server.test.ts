@@ -303,34 +303,37 @@ describe("public API server", () => {
     try {
       // 1. Demo receipt
       const demoResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/passed`, {
-        headers: { accept: "text/html" },
+        headers: { accept: "text/html", "x-forwarded-host": "proofrunner.org", "x-forwarded-proto": "https" },
       });
       expect(demoResponse.status).toBe(200);
       expect(demoResponse.headers.get("content-type")).toContain("text/html");
       const demoHtml = await demoResponse.text();
       expect(demoHtml).toContain('<meta property="og:title" content="[DEMO] PASS Verification Receipt (demo-fixed) · ProofRunner" />');
       expect(demoHtml).toContain('<meta property="og:description" content="Demo verification evidence for ever-guild/proof-runner at tag demo-fixed: All 5 demo checks passed in 12.4 seconds." />');
+      expect(demoHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/passed" />');
       expect(demoHtml).toContain('<meta property="og:type" content="website" />');
 
       // 2. Unknown receipt returns 404
       const missingResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/unknown-id-999`, {
-        headers: { accept: "text/html" },
+        headers: { accept: "text/html", "x-forwarded-host": "proofrunner.org", "x-forwarded-proto": "https" },
       });
       expect(missingResponse.status).toBe(404);
       expect(missingResponse.headers.get("content-type")).toContain("text/html");
       const missingHtml = await missingResponse.text();
       expect(missingHtml).toContain('<meta property="og:title" content="Receipt Not Found · ProofRunner" />');
       expect(missingHtml).toContain('<meta property="og:description" content="Verification receipt unknown-id-999 was not found." />');
+      expect(missingHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/unknown-id-999" />');
 
       // 3. Live receipt
       const liveResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/live-pass-1`, {
-        headers: { accept: "text/html" },
+        headers: { accept: "text/html", "x-forwarded-host": "proofrunner.org", "x-forwarded-proto": "https" },
       });
       expect(liveResponse.status).toBe(200);
       expect(liveResponse.headers.get("content-type")).toContain("text/html");
       const liveHtml = await liveResponse.text();
       expect(liveHtml).toContain('<meta property="og:title" content="Verification Receipt live-pass-1 · PASS · ProofRunner" />');
       expect(liveHtml).toContain('<meta property="og:description" content="Signed verification evidence receipt for run live-pass-1 with verdict PASS." />');
+      expect(liveHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/live-pass-1" />');
 
     } finally {
       orchestrator.stop();

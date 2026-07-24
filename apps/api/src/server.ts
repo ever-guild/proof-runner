@@ -190,7 +190,9 @@ const apiDemoReceipts: Record<string, { verdict: string; status: string; gitTag:
       if (request.method === "GET" && htmlReceiptMatch && (request.headers.accept?.includes("text/html") ?? true)) {
         const receiptId = decodePathSegment(htmlReceiptMatch[1] ?? "");
         if (receiptId !== null) {
-          const fullUrl = `https://${request.headers.host ?? "proofrunner.org"}${url.pathname}`;
+          const hostHeader = (request.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim() || request.headers.host || "proofrunner.org";
+          const protoHeader = (request.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || "https";
+          const fullUrl = `${protoHeader}://${hostHeader}${url.pathname}`;
           const isDemo = receiptId === "passed" || receiptId === "broken" || receiptId === "timeout" || receiptId === "system-error" || receiptId === "inconclusive" || url.pathname.startsWith("/examples/");
 
           if (isDemo) {
