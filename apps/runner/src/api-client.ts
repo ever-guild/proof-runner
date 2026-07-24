@@ -18,6 +18,28 @@ export interface ApiCallbackClient {
   result(runId: string, result: InternalResultDeliveryRequest): Promise<void>;
 }
 
+export class ApiCallbackError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+  ) {
+    super(code ?? "API_CALLBACK_FAILED");
+    this.name = "ApiCallbackError";
+  }
+}
+
+const apiCallbackError = async (response: Response): Promise<ApiCallbackError> => {
+  let code: string | null = null;
+  try {
+    const body = await response.json() as { error?: { code?: unknown } };
+    if (typeof body.error?.code === "string") code = body.error.code;
+  } catch {
+    // The status remains sufficient to distinguish a transient 5xx from a
+    // definitive client error without retaining an error body.
+  }
+  return new ApiCallbackError(response.status, code);
+};
+
 export class HttpApiCallbackClient implements ApiCallbackClient {
   constructor(
     private readonly baseUrl: string,
@@ -69,7 +91,7 @@ export class HttpApiCallbackClient implements ApiCallbackClient {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new Error("API_CALLBACK_FAILED");
+    if (!response.ok) throw await apiCallbackError(response);
     return response;
   }
 }

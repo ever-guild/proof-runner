@@ -9,7 +9,11 @@ import type { RunnerConfig } from "./config.js";
 import { RunnerError } from "./errors.js";
 import type { SandboxExecution } from "./sandbox.js";
 import { DockerSandbox } from "./sandbox.js";
-import { callbackClientFor, type ApiCallbackClient } from "./api-client.js";
+import {
+  ApiCallbackError,
+  callbackClientFor,
+  type ApiCallbackClient,
+} from "./api-client.js";
 
 export type TransportErrorCode =
   | "UNAUTHORIZED"
@@ -58,6 +62,13 @@ const sameResult = (
   left: InternalResultDeliveryRequest,
   right: InternalResultDeliveryRequest,
 ): boolean => canonicalize(left) === canonicalize(right);
+
+const RESULT_DELIVERY_RETRY_DELAY_MS = 100;
+
+const isRetryableResultDeliveryFailure = (error: unknown): boolean => {
+  if (!(error instanceof ApiCallbackError)) return true;
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+};
 
 export class RunnerService {
   private readonly runs = new Map<string, StoredRun>();
@@ -335,10 +346,34 @@ export class RunnerService {
     // otherwise-finished run as still active.
     this.release(run.dispatch.runId);
     if (this.callback && run.result) {
+      await this.deliverRetainedResult(run);
+    }
+  }
+
+  /**
+   * Result payloads are immutable and the API persists a fingerprint, so a
+   * retry after a lost response is safe. Do not retry definitive 4xx replies:
+   * they mean the API has either expired the lease or rejected this result.
+   */
+  private async deliverRetainedResult(run: StoredRun): Promise<void> {
+    const callback = this.callback;
+    const result = run.result;
+    if (!callback || !result) return;
+
+    while (Date.now() < new Date(run.leaseExpiresAt).getTime()) {
       try {
-        await this.callback.result(run.dispatch.runId, run.result);
-      } catch {
-        // The API lease monitor will make an unavailable callback terminal.
+        await callback.result(run.dispatch.runId, result);
+        return;
+      } catch (error) {
+        if (!isRetryableResultDeliveryFailure(error)) return;
+        // A heartbeat already in flight when execution finished may extend the
+        // API lease after this delivery attempt fails. Re-read the shared lease
+        // instead of holding the dispatch-time deadline for the whole loop.
+        const remaining = new Date(run.leaseExpiresAt).getTime() - Date.now();
+        if (remaining <= 0) return;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, Math.min(RESULT_DELIVERY_RETRY_DELAY_MS, remaining));
+        });
       }
     }
   }
