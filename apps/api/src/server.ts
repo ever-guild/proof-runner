@@ -145,16 +145,16 @@ export const renderReceiptOpenGraphHtml = (params: {
     <meta name="twitter:title" content="${safeTitle}" />
     <meta name="twitter:description" content="${safeDesc}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-slate-950 text-white font-sans antialiased">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body style="background-color:#020617;color:#ffffff;font-family:sans-serif;padding:2rem;">
+    <main>
+      <h1>${safeTitle}</h1>
+      <p>${safeDesc}</p>
+    </main>
   </body>
 </html>`;
 };
+
 
 export const createApiServer = (dependencies: ApiServerDependencies) => {
   const startVerification = (
