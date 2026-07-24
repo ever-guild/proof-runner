@@ -89,6 +89,7 @@ export const createRunnerServer = (
   config = loadRunnerConfig(),
   service = new RunnerService(config),
 ): RunnerHttpServer => {
+  if (!config.apiCallbackUrl) throw new Error("PROOF_RUNNER_API_URL is required when starting the runner server");
   const server = createServer(async (request, response) => {
     try {
       service.authenticate(request.headers.authorization);

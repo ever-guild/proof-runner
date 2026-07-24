@@ -73,3 +73,9 @@ The benchmark performs ten serial target-worker runs and exits non-zero unless
 p95 is at most 90 seconds and every run stays within the 180-second hard cap.
 The checked benchmark evidence is in
 [`docs/benchmark-2026-07-24.json`](docs/benchmark-2026-07-24.json).
+# Runner configuration
+
+The orchestrated runner requires `PROOF_RUNNER_BEARER_TOKEN` and
+`PROOF_RUNNER_API_URL`. The latter is the internal API callback origin for
+lease-renewal heartbeats and terminal results; startup fails closed when it is
+absent or not an internal HTTP(S) URL.

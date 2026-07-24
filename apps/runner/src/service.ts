@@ -8,6 +8,7 @@ import type { RunnerConfig } from "./config.js";
 import { RunnerError } from "./errors.js";
 import type { SandboxExecution } from "./sandbox.js";
 import { DockerSandbox } from "./sandbox.js";
+import { callbackClientFor, type ApiCallbackClient } from "./api-client.js";
 
 export type TransportErrorCode =
   | "UNAUTHORIZED"
@@ -66,6 +67,7 @@ export class RunnerService {
     private readonly sandbox: Pick<DockerSandbox, "execute"> = new DockerSandbox(
       config,
     ),
+    private readonly callback: ApiCallbackClient | null = callbackClientFor(config),
   ) {}
 
   authenticate(header: string | undefined): void {
@@ -236,6 +238,17 @@ export class RunnerService {
   }
 
   private async execute(run: StoredRun): Promise<void> {
+    const heartbeatIntervalMs = Math.max(50, Math.min(1_000, Math.floor(
+      Math.max(100, new Date(run.leaseExpiresAt).getTime() - Date.now()) / 2,
+    )));
+    const heartbeat = setInterval(() => {
+      void this.callback?.heartbeat(
+        run.dispatch.runId,
+        run.dispatch.lease.leaseId,
+        run.activeStage,
+      ).then((leaseExpiresAt) => { run.leaseExpiresAt = leaseExpiresAt; }).catch(() => undefined);
+    }, heartbeatIntervalMs);
+    heartbeat.unref();
     let execution: SandboxExecution;
     try {
       execution = await this.sandbox.execute(run.dispatch.runId, run.dispatch.request, {
@@ -252,6 +265,8 @@ export class RunnerService {
         },
         onStage: (stage) => {
           run.activeStage = stage;
+          void this.callback?.heartbeat(run.dispatch.runId, run.dispatch.lease.leaseId, stage)
+            .then((leaseExpiresAt) => { run.leaseExpiresAt = leaseExpiresAt; }).catch(() => undefined);
         },
       });
     } catch (error) {
@@ -266,6 +281,7 @@ export class RunnerService {
       };
     }
     if (run.result !== null) {
+      clearInterval(heartbeat);
       this.release(run.dispatch.runId);
       return;
     }
@@ -295,6 +311,15 @@ export class RunnerService {
     }
     run.status = execution.status;
     run.activeStage = null;
+    const result = run.result;
+    if (this.callback && result) {
+      while (Date.now() < new Date(run.leaseExpiresAt).getTime()) {
+        try { await this.callback.result(run.dispatch.runId, result); break; } catch {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+    }
+    clearInterval(heartbeat);
     this.release(run.dispatch.runId);
   }
 
