@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/suite.schema.json",
+  "title": "PRVC Suite Schema",
+  "type": "object",
+  "required": ["schema_version", "suite_id", "title", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.suite/v1" },
+    "suite_id": { "type": "string" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    }
+  }
+}

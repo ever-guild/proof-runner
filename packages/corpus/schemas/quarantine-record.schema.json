@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ever-guild.net/prvc/research/quarantine-record.schema.json",
+  "title": "PRVC Quarantine Record v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "source_kind",
+    "stage",
+    "reason_code",
+    "summary",
+    "observed_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "prvc.quarantine/v2" },
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "source_kind": { "type": "string", "minLength": 1 },
+    "upstream_instance_id": { "type": "string" },
+    "upstream_repository_url": { "type": "string", "format": "uri" },
+    "stage": {
+      "enum": [
+        "DISCOVERY",
+        "LICENSE",
+        "ACQUISITION",
+        "PATCH_APPLY",
+        "INSTALL",
+        "BUILD",
+        "TEST",
+        "REPRODUCIBILITY",
+        "PORTABILITY",
+        "SECURITY",
+        "SCHEMA"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "MISSING_SOURCE_REVISION",
+        "INVALID_COMMIT",
+        "PATCH_FUZZ_REQUIRED",
+        "PATCH_APPLY_FAILED",
+        "LICENSE_UNKNOWN",
+        "LICENSE_BLOCKED",
+        "EXTERNAL_SERVICE_REQUIRED",
+        "NETWORK_REQUIRED",
+        "DEPENDENCY_UNAVAILABLE",
+        "RUNTIME_UNSUPPORTED",
+        "BUILD_UNREPRODUCIBLE",
+        "BUGGY_DID_NOT_FAIL",
+        "FIXED_DID_NOT_PASS",
+        "UNEXPECTED_FAILURES",
+        "FLAKY_RESULT",
+        "TEST_ID_UNRESOLVED",
+        "TIME_BUDGET_EXCEEDED",
+        "RESOURCE_BUDGET_EXCEEDED",
+        "SCHEMA_INCOMPATIBLE",
+        "DUPLICATE",
+        "SECURITY_RISK",
+        "OTHER"
+      ]
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "evidence_paths": { "type": "array", "items": { "type": "string" } },
+    "retry_conditions": { "type": "string" },
+    "observed_at": { "type": "string", "format": "date-time" }
+  }
+}

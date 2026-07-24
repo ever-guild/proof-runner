@@ -1,0 +1,9 @@
+{
+  "schema_version": "prvc.certification/v1",
+  "level": "IMPORTED",
+  "summary": {
+    "total_cases": 50,
+    "passed_cases": 0,
+    "failed_cases": 0
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/case.schema.json",
+  "title": "PRVC Case Schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "case_id",
+    "title",
+    "suite",
+    "visibility",
+    "source",
+    "licenses",
+    "subject",
+    "execution_profile",
+    "variants",
+    "oracle_ref",
+    "integrity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.case/v1" },
+    "case_id": { "type": "string", "pattern": "^prvc\\.[a-z0-9-]+(\\.[a-z0-9-]+){2,4}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "suite": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "visibility": { "type": "string", "enum": ["public", "hidden"] },
+    "source": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["synthetic", "imported-unverified", "swe-polybench-verified", "bugsjs", "multi-swe-bench", "bugswarm"] },
+        "upstream_instance_id": { "type": "string" },
+        "imported_at": { "type": "string" }
+      }
+    },
+    "licenses": {
+      "type": "object",
+      "required": ["dataset"],
+      "properties": {
+        "dataset": { "type": "object", "required": ["expression"], "properties": { "expression": { "type": "string" } } },
+        "upstream_repository": { "type": "object", "properties": { "expression": { "type": "string" } } }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": ["language", "project_type", "package_manager"],
+      "properties": {
+        "language": { "type": "string", "enum": ["javascript", "typescript"] },
+        "project_type": { "type": "string", "enum": ["node"] },
+        "package_manager": { "type": "string", "enum": ["npm", "pnpm"] }
+      }
+    },
+    "execution_profile": {
+      "type": "object",
+      "required": ["profile_id"],
+      "properties": {
+        "profile_id": { "type": "string" },
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "architecture": { "type": "string" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "wall_time_seconds": { "type": "number" },
+            "cpu_time_seconds": { "type": "number" },
+            "memory_bytes": { "type": "number" },
+            "pids": { "type": "number" }
+          }
+        },
+        "network": { "type": "object" },
+        "environment": { "type": "object" }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["request"],
+        "properties": {
+          "patches": { "type": "array", "items": { "type": "string" } },
+          "request": {
+            "type": "object",
+            "properties": {
+              "git_ref": { "type": "string" },
+              "verification_skill": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "version": { "type": "string" },
+                  "digest": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "oracle_ref": { "type": "string" },
+    "integrity": {
+      "type": "object",
+      "required": ["case_hash_algorithm", "case_hash_canonicalization", "sha256"],
+      "properties": {
+        "case_hash_algorithm": { "type": "string", "const": "sha256" },
+        "case_hash_canonicalization": { "type": "string", "const": "RFC8785" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

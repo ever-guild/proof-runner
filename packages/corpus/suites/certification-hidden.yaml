@@ -1,0 +1,9 @@
+schema_version: "prvc.suite/v1"
+suite_id: "certification-hidden"
+title: "PRVC Certification Hidden Suite"
+description: "Hidden suite used for final verification to prevent oracle hardcoding."
+cases:
+  - "prvc.synthetic.node.core-pass-001"
+  - "prvc.synthetic.node.core-fail-test-003"
+  - "prvc.synthetic.node.sandbox-secret-env-017"
+  - "prvc.synthetic.node.receipt-tamper-commit-026"

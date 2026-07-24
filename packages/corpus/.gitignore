@@ -1,0 +1,6 @@
+dist/
+tmp/
+local/
+*.zip
+node_modules/
+.vitest-tmp/

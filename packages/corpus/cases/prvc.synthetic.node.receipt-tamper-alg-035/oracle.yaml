@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.receipt-tamper-alg-035
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: RECEIPT_SCHEMA_INVALID
+      terminal_status: COMPLETED
+      verdict: INCONCLUSIVE

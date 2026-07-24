@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.core-no-tests-req-007
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: NO_TESTS_DISCOVERED
+      terminal_status: COMPLETED
+      verdict: FAIL

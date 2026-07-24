@@ -1,0 +1,20 @@
+case_id: prvc.real.pbv.javascript.express-037
+relations:
+  - from: buggy
+    to: fixed
+    type: fail-to-pass
+schema_version: prvc.oracle/v1
+variants:
+  buggy:
+    expected:
+      reason_code: TEST_FAILURE
+      terminal_status: COMPLETED
+      tests:
+        failing_exact:
+          - test/res.send.js::res.send::handles buffers correctly
+      verdict: FAIL
+  fixed:
+    expected:
+      reason_code: NONE
+      terminal_status: COMPLETED
+      verdict: PASS

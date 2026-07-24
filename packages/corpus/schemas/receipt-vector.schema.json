@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/receipt-vector.schema.json",
+  "title": "PRVC Receipt Vector Schema",
+  "type": "object",
+  "required": ["schema_version", "vector_id", "description", "expected_valid", "receipt"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.receipt-vector/v1" },
+    "vector_id": { "type": "string" },
+    "description": { "type": "string" },
+    "expected_valid": { "type": "boolean" },
+    "expected_error": { "type": "string" },
+    "receipt": { "type": "object" }
+  }
+}

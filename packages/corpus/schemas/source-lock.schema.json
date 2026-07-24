@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/source-lock.schema.json",
+  "title": "PRVC Source Lock Schema",
+  "type": "object",
+  "required": ["schema_version", "source_kind", "artifact_sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.source-lock/v1" },
+    "source_kind": { "type": "string" },
+    "locked_at": { "type": "string", "format": "date-time" },
+    "commit_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "repository_url": { "type": "string", "format": "uri" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "source_kind": { "const": "generated-prvc-fixtures" } },
+        "required": ["source_kind"]
+      },
+      "else": {
+        "required": ["locked_at", "commit_sha", "repository_url"]
+      }
+    }
+  ]
+}

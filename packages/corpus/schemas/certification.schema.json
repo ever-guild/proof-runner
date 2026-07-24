@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/certification.schema.json",
+  "title": "PRVC Certification Schema",
+  "type": "object",
+  "required": ["schema_version", "level", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.certification/v1" },
+    "certified_at": { "type": "string", "format": "date-time" },
+    "level": { "type": "string", "enum": ["CANDIDATE", "IMPORTED", "REPRODUCED", "STABLE", "PORTABLE", "GOLD", "QUARANTINED", "RETIRED"] },
+    "summary": {
+      "type": "object",
+      "required": ["total_cases", "passed_cases", "failed_cases"],
+      "properties": {
+        "total_cases": { "type": "integer" },
+        "passed_cases": { "type": "integer" },
+        "failed_cases": { "type": "integer" }
+      }
+    }
+  }
+}

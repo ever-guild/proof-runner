@@ -1,0 +1,10 @@
+profile_id: "node-pnpm/v1"
+runtime:
+  image: "node:22-alpine@sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31"
+  architecture: "linux/amd64"
+package_manager: "pnpm"
+limits:
+  wall_time_seconds: 120
+  cpu_time_seconds: 90
+  memory_bytes: 2147483648
+  pids: 128
