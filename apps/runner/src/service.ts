@@ -238,13 +238,16 @@ export class RunnerService {
   }
 
   private async execute(run: StoredRun): Promise<void> {
+    const heartbeatIntervalMs = Math.max(50, Math.min(1_000, Math.floor(
+      Math.max(100, new Date(run.leaseExpiresAt).getTime() - Date.now()) / 2,
+    )));
     const heartbeat = setInterval(() => {
       void this.callback?.heartbeat(
         run.dispatch.runId,
         run.dispatch.lease.leaseId,
         run.activeStage,
       ).then((leaseExpiresAt) => { run.leaseExpiresAt = leaseExpiresAt; }).catch(() => undefined);
-    }, Math.max(1_000, Math.floor(this.config.leaseExtensionMs / 2)));
+    }, heartbeatIntervalMs);
     heartbeat.unref();
     let execution: SandboxExecution;
     try {
@@ -308,13 +311,15 @@ export class RunnerService {
     }
     run.status = execution.status;
     run.activeStage = null;
-    clearInterval(heartbeat);
-    if (this.callback) {
-      const result = run.result;
-      if (result) {
-        try { await this.callback.result(run.dispatch.runId, result); } catch { /* API lease expiry handles unavailable callbacks */ }
+    const result = run.result;
+    if (this.callback && result) {
+      while (Date.now() < new Date(run.leaseExpiresAt).getTime()) {
+        try { await this.callback.result(run.dispatch.runId, result); break; } catch {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
     }
+    clearInterval(heartbeat);
     this.release(run.dispatch.runId);
   }
 

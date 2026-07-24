@@ -12,6 +12,7 @@ import { Orchestrator } from "./orchestration.js";
 import { RunStore } from "./store.js";
 
 const MAX_BODY = 1024 * 1024;
+class RequestBodyError extends Error {}
 
 const send = (response: ServerResponse, status: number, payload: unknown): void => {
   const body = JSON.stringify(payload);
@@ -21,8 +22,8 @@ const send = (response: ServerResponse, status: number, payload: unknown): void 
 const publicError = (response: ServerResponse, status: number, code: string, message: string, retryable = false): void => send(response, status, { contractVersion: CONTRACT_VERSION, error: { code, message, retryable } });
 const readJson = async (request: IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = []; let length = 0;
-  for await (const chunk of request) { const buffer = Buffer.from(chunk); length += buffer.length; if (length > MAX_BODY) throw new Error("too large"); chunks.push(buffer); }
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("invalid json"); }
+  for await (const chunk of request) { const buffer = Buffer.from(chunk); length += buffer.length; if (length > MAX_BODY) throw new RequestBodyError(); chunks.push(buffer); }
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new RequestBodyError(); }
 };
 const parse = <T>(schema: { safeParse(value: unknown): { success: boolean; data?: T } }, body: unknown): T | null => {
   if (typeof body === "object" && body !== null && "contractVersion" in body && body.contractVersion !== CONTRACT_VERSION) return null;
@@ -34,7 +35,11 @@ export interface ApiServerDependencies {
   inspection: InspectionService;
   orchestrator: Orchestrator;
   bearerToken: string;
-  receiptReader?: { get(id: string): { receipt: unknown } | null };
+  receiptReader?: {
+    get(id: string): { receipt: unknown } | null;
+    publicKey(keyId: string): unknown | null;
+    verify(receipt: unknown): unknown;
+  };
 }
 
 export const createApiServer = (dependencies: ApiServerDependencies) => {
@@ -72,6 +77,15 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
         const stored = dependencies.receiptReader?.get(decodeURIComponent(receipt[1] ?? ""));
         return stored ? send(response, 200, stored.receipt) : publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt was not found.");
       }
+      const receiptKey = url.pathname.match(/^\/api\/receipt-keys\/([^/]+)$/);
+      if (request.method === "GET" && receiptKey) {
+        const key = dependencies.receiptReader?.publicKey(decodeURIComponent(receiptKey[1] ?? ""));
+        return key ? send(response, 200, key) : publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt key was not found.");
+      }
+      if (request.method === "POST" && url.pathname === "/api/receipts/verify") {
+        if (!dependencies.receiptReader) return publicError(response, 404, "RECEIPT_NOT_FOUND", "Receipt service is not configured.");
+        return send(response, 200, dependencies.receiptReader.verify(await readJson(request)));
+      }
       const callback = url.pathname.match(/^\/internal\/v1\/runs\/([^/]+)\/(heartbeat|result)$/);
       if (callback) {
         if (!authenticated(request.headers.authorization)) return publicError(response, 401, "UNAUTHORIZED", "Internal authentication is required.");
@@ -93,8 +107,9 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
         }
       }
       return publicError(response, 404, "INVALID_REQUEST", "Route was not found.");
-    } catch {
-      return publicError(response, 400, "INVALID_REQUEST", "Request body must be valid JSON.");
+    } catch (error) {
+      if (error instanceof RequestBodyError) return publicError(response, 400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      return publicError(response, 500, "INTERNAL_ERROR", "The service could not process this request.", true);
     }
   });
 };

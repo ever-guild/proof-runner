@@ -6,6 +6,7 @@ import {
   RunResponseSchema,
   type NormalizedCheck,
   type RunResponse,
+  type SignedReceipt,
   type VerificationReport,
   type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
@@ -102,7 +103,7 @@ export class RunStore {
     return this.database.prepare("UPDATE run_metadata SET active_stage = ? WHERE id = ? AND status = 'RUNNING'").run(stage, id).changes > 0;
   }
 
-  complete(id: string, status: "COMPLETED" | "TIMEOUT", report: VerificationReport): StoredRun | null {
+  complete(id: string, status: "COMPLETED" | "TIMEOUT", report: VerificationReport, receipt: SignedReceipt): StoredRun | null {
     if (report.runId !== id) return null;
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -114,6 +115,9 @@ export class RunStore {
       const insert = this.database.prepare(`INSERT INTO normalized_checks (run_id, check_index, check_id, stage, title, outcome, started_at, completed_at, duration_ms, exit_code, summary)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       report.checks.forEach((check, index) => insert.run(id, index, check.id, check.stage, check.title, check.outcome, check.startedAt, check.completedAt, check.durationMs, check.exitCode, check.summary));
+      this.database.prepare(`INSERT INTO signed_receipts (id, run_id, payload_json, payload_hash, key_id, signature, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(receipt.payload.id, id, JSON.stringify(receipt.payload), receipt.payloadHash, receipt.keyId, receipt.signature, receipt.payload.createdAt);
       const updated = this.database.prepare("SELECT * FROM run_metadata WHERE id = ?").get(id) as RunRow;
       this.database.exec("COMMIT");
       return this.inflate(updated);
@@ -124,6 +128,10 @@ export class RunStore {
     const now = new Date().toISOString();
     const changes = this.database.prepare("UPDATE run_metadata SET status = 'SYSTEM_ERROR', verdict = 'INCONCLUSIVE', active_stage = NULL, completed_at = ?, system_error_code = ?, system_error_message = ?, system_error_retryable = ? WHERE id = ? AND status = 'RUNNING'").run(now, code, message, retryable ? 1 : 0, id).changes;
     return changes ? this.get(id) : null;
+  }
+
+  requeue(id: string): boolean {
+    return this.database.prepare("UPDATE run_metadata SET status = 'QUEUED', started_at = NULL, active_stage = NULL WHERE id = ? AND status = 'RUNNING'").run(id).changes > 0;
   }
 
   recoverInterruptedRuns(): void {

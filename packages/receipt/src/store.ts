@@ -56,7 +56,7 @@ export class ReceiptStore {
           existing.repository_url !== report.repositoryUrl ||
           existing.resolved_commit_sha !== report.resolvedCommitSha ||
           existing.skill_hash !== report.skill.hash ||
-          existing.verdict !== report.verdict
+          (existing.verdict !== null && existing.verdict !== report.verdict)
         ) {
           throw new Error("Stored run metadata does not match the receipt report");
         }

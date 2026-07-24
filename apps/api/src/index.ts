@@ -20,7 +20,7 @@ export const createProductionApi = (env: NodeJS.ProcessEnv = process.env) => {
   if (!runnerUrl?.startsWith("https://") && !runnerUrl?.startsWith("http://127.0.0.1:")) throw new Error("PROOF_RUNNER_RUNNER_URL must be an internal HTTP(S) URL");
   const store = new RunStore(receiptConfig.databasePath);
   const receipts = new ReceiptService({ keyId: receiptConfig.keyId, privateKeyPem: receiptConfig.privateKeyPem }, new ReceiptStore(receiptConfig.databasePath), receiptConfig.verificationKeys);
-  const orchestrator = new Orchestrator(store, new HttpRunnerClient(runnerUrl, token), receipts);
+  const orchestrator = new Orchestrator(store, new HttpRunnerClient(runnerUrl, token), receipts.signer);
   const server = createApiServer({ store, inspection: new InspectionService(), orchestrator, bearerToken: token, receiptReader: receipts });
   return { server, store, orchestrator, close: () => { orchestrator.stop(); store.close(); } };
 };

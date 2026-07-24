@@ -55,6 +55,7 @@ type PackageJson = {
   dependencies?: Record<string, unknown>;
   devDependencies?: Record<string, unknown>;
 };
+const LIFECYCLE_SCRIPTS = new Set(["preinstall", "install", "postinstall", "prepublish", "prepare", "pnpm:devPreinstall"]);
 
 const unsupported = (reason: Extract<InspectResult, { supported: false }>["reason"], message: string): InspectResult => ({
   contractVersion: CONTRACT_VERSION, supported: false, reason, message,
@@ -98,6 +99,9 @@ export class InspectionService {
     }
     const allDependencies = { ...manifest.dependencies, ...manifest.devDependencies };
     const scripts = manifest.scripts ?? {};
+    if (Object.keys(scripts).some((script) => LIFECYCLE_SCRIPTS.has(script))) {
+      return unsupported("LIFECYCLE_SCRIPTS_REQUIRED", "Install lifecycle scripts are not supported.");
+    }
     return {
       contractVersion: CONTRACT_VERSION,
       supported: true,

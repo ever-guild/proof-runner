@@ -10,7 +10,7 @@ const config: RunnerConfig = {
   host: "127.0.0.1",
   port: 8788,
   bearerToken: "a".repeat(32),
-  apiCallbackUrl: "http://127.0.0.1:9999",
+  apiCallbackUrl: null,
   leaseExtensionMs: 30_000,
   runtimeImage: "unused",
   proxyImage: "unused",

@@ -28,4 +28,4 @@ export class HttpApiCallbackClient implements ApiCallbackClient {
   }
 }
 
-export const callbackClientFor = (config: RunnerConfig): ApiCallbackClient => new HttpApiCallbackClient(config.apiCallbackUrl, config.bearerToken);
+export const callbackClientFor = (config: RunnerConfig): ApiCallbackClient | null => config.apiCallbackUrl ? new HttpApiCallbackClient(config.apiCallbackUrl, config.bearerToken) : null;

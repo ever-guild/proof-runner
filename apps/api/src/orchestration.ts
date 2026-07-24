@@ -3,6 +3,7 @@ import {
   CONTRACT_VERSION,
   type InternalResultDeliveryRequest,
   type NormalizedCheck,
+  type SignedReceipt,
   type VerificationReport,
 } from "@ever-guild/proof-runner-schema";
 import { RunStore } from "./store.js";
@@ -27,11 +28,12 @@ export class HttpRunnerClient implements RunnerClient {
   cancel(runId: string): Promise<void> { return this.request(`/internal/v1/runs/${encodeURIComponent(runId)}/cancel`, "POST", { contractVersion: CONTRACT_VERSION, reason: "LEASE_EXPIRED", requestedAt: new Date().toISOString() }); }
 }
 
-export interface ReceiptIssuer { issue(report: VerificationReport, options: { isPublic: boolean }): unknown; }
+export interface ReceiptIssuer { issue(report: VerificationReport): SignedReceipt; }
 
 export class Orchestrator {
   private active: { id: string; leaseId: string; expiresAt: number } | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly store: RunStore,
@@ -47,7 +49,7 @@ export class Orchestrator {
     void this.dispatchNext();
   }
 
-  stop(): void { if (this.timer) clearInterval(this.timer); this.timer = null; }
+  stop(): void { if (this.timer) clearInterval(this.timer); if (this.retryTimer) clearTimeout(this.retryTimer); this.timer = null; this.retryTimer = null; }
 
   async dispatchNext(): Promise<void> {
     if (this.active) return;
@@ -59,9 +61,9 @@ export class Orchestrator {
     try {
       await this.runner.dispatch({ contractVersion: CONTRACT_VERSION, runId: run.response.id, lease: { leaseId, leaseExpiresAt: new Date(expiresAt).toISOString() }, request: run.request });
     } catch {
-      this.store.systemError(run.response.id, "RUNNER_UNAVAILABLE", "The runner did not accept the run.", true);
+      this.store.requeue(run.response.id);
       this.active = null;
-      await this.dispatchNext();
+      this.retryTimer = setTimeout(() => { this.retryTimer = null; void this.dispatchNext(); }, 1_000);
     }
   }
 
@@ -77,8 +79,13 @@ export class Orchestrator {
     if (result.status === "SYSTEM_ERROR") {
       stored = this.store.systemError(runId, result.systemError.code, "The runner reported a system error.", result.systemError.retryable);
     } else {
-      stored = this.store.complete(runId, result.status, result.report);
-      if (stored?.response.report) this.receiptIssuer.issue(stored.response.report, { isPublic: stored.request.public });
+      const active = this.store.get(runId);
+      if (!active) return false;
+      try {
+        stored = this.store.complete(runId, result.status, result.report, this.receiptIssuer.issue(result.report));
+      } catch {
+        stored = this.store.systemError(runId, "RECEIPT_ISSUANCE_FAILED", "The receipt could not be issued.", true);
+      }
     }
     if (!stored) return false;
     this.active = null;

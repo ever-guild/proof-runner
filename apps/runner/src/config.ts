@@ -17,7 +17,7 @@ export interface RunnerConfig {
   host: string;
   port: number;
   bearerToken: string;
-  apiCallbackUrl: string;
+  apiCallbackUrl: string | null;
   leaseExtensionMs: number;
   runtimeImage: string;
   proxyImage: string;
@@ -49,8 +49,8 @@ export const loadRunnerConfig = (
   if (!bearerToken || bearerToken.length < 32) {
     throw new Error("PROOF_RUNNER_BEARER_TOKEN must contain at least 32 characters");
   }
-  const apiCallbackUrl = env.PROOF_RUNNER_API_URL;
-  if (!apiCallbackUrl?.startsWith("https://") && !apiCallbackUrl?.startsWith("http://127.0.0.1:")) {
+  const apiCallbackUrl = env.PROOF_RUNNER_API_URL ?? null;
+  if (apiCallbackUrl !== null && !apiCallbackUrl.startsWith("https://") && !apiCallbackUrl.startsWith("http://127.0.0.1:")) {
     throw new Error("PROOF_RUNNER_API_URL must be an internal HTTP(S) URL");
   }
 

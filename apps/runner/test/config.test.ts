@@ -10,8 +10,8 @@ describe("runner configuration", () => {
     expect(() =>
       loadRunnerConfig({ PROOF_RUNNER_BEARER_TOKEN: "short" }),
     ).toThrow(/BEARER_TOKEN/);
-    expect(() => loadRunnerConfig({ PROOF_RUNNER_BEARER_TOKEN: "a".repeat(32) }))
-      .toThrow(/PROOF_RUNNER_API_URL/);
+    expect(loadRunnerConfig({ PROOF_RUNNER_BEARER_TOKEN: "a".repeat(32) }).apiCallbackUrl)
+      .toBeNull();
   });
 
   it("never permits a timeout above the 180-second hard cap", () => {

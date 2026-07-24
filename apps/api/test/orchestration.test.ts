@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CONTRACT_VERSION,
   type InternalResultDeliveryRequest,
+  type SignedReceipt,
   type VerificationReport,
 } from "@ever-guild/proof-runner-schema";
 import { InspectionService, type InspectionGateway } from "../src/inspection.js";
@@ -37,7 +38,18 @@ class FakeRunner implements RunnerClient {
   async dispatch(body: { runId: string; lease: { leaseId: string } }): Promise<void> { this.calls.push({ runId: body.runId, leaseId: body.lease.leaseId }); }
   async cancel(runId: string): Promise<void> { this.cancels.push(runId); }
 }
-class FakeReceipts implements ReceiptIssuer { reports: VerificationReport[] = []; issue(report: VerificationReport): void { this.reports.push(report); } }
+class FakeReceipts implements ReceiptIssuer {
+  reports: VerificationReport[] = [];
+  issue(report: VerificationReport): SignedReceipt {
+    this.reports.push(report);
+    return {
+      contractVersion: CONTRACT_VERSION,
+      payload: { contractVersion: CONTRACT_VERSION, id: report.runId, report, createdAt: report.completedAt },
+      canonicalization: "JCS-RFC8785", hashAlgorithm: "SHA-256", payloadHash: "f".repeat(64),
+      signatureAlgorithm: "Ed25519", keyId: "test", signature: "test",
+    };
+  }
+}
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
