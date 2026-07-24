@@ -18,6 +18,7 @@
     "pretest": "pnpm --filter @ever-guild/proof-runner-schema build",
     "test": "vitest run --config vitest.ui.config.ts && pnpm run test:storybook && pnpm -r test && pnpm run test:deployment",
     "test:deployment": "node --test deployment/test/*.test.mjs",
+    "secrets": "node deployment/provision-secrets.mjs",
     "test:storybook": "vitest run --config vite.config.ts",
     "pretypecheck": "pnpm --filter @ever-guild/proof-runner-schema build",
     "typecheck": "tsc -p tsconfig.ui.json && pnpm -r typecheck"

@@ -9,31 +9,63 @@ disposable sandbox containers, but is never mounted into a sandbox.
 ## Provisioning
 
 Before startup, the deployment owner must confirm the domain/DNS/certificate
-ownership and inject these values from the host secret manager or a host-only
-`deployment/.env` file:
+ownership and prepare a host-only `deployment/.env.production`:
 
-- `PROOF_RUNNER_BEARER_TOKEN`: a new random value of at least 32 characters;
+- `PROOF_RUNNER_BEARER_TOKEN`: a new random value with at least 48 bytes of
+  entropy;
 - `PROOF_RUNNER_RECEIPT_PRIVATE_KEY`: dedicated Ed25519 receipt key, never a
   wallet key;
 - `PROOF_RUNNER_RECEIPT_KEY_ID` and any retained public verification keys;
-- `PROOF_RUNNER_DOMAIN`: the public DNS name.
+- `PROOF_RUNNER_DOMAIN`: the public DNS name;
 - `PROOF_RUNNER_BACKUP_PATH`: an encrypted, provider-retained host path outside
   the Docker volume; it is mounted only by the backup service.
 
 Do not put any of those values in Git, container images, an issue, or logs.
-To create a new runner token and dedicated Ed25519 receipt key on the worker,
-copy the example env file and run:
+Create a new production file, 48-byte random runner token, and dedicated
+Ed25519 receipt key on the worker with:
 
 ```sh
-cp deployment/.env.example deployment/.env
-chmod 600 deployment/.env
-node deployment/provision-secrets.mjs --env-file deployment/.env
+pnpm secrets init
 ```
 
-The script writes the token and private key only to the local `.env` file and
-writes the non-secret public receipt key next to it. It refuses to overwrite
-existing values. Receipt-key rotation must preserve the previous public key and
-use a new key ID; it is intentionally not automated by this bootstrap script.
+The command creates `deployment/.env.production` with mode `0600` and writes
+the non-secret public receipt key beside it with mode `0644`. It never prints
+secret values and refuses to overwrite either file. Set
+`PROOF_RUNNER_DOMAIN` in the generated file, then review the backup and runtime
+settings. Validate the complete file without changing GitHub:
+
+```sh
+pnpm secrets apply \
+  --repo ever-guild/proof-runner \
+  --environment production \
+  --dry-run
+```
+
+After `gh auth status` confirms the intended GitHub identity, create/update the
+GitHub Environment and its values:
+
+```sh
+pnpm secrets apply \
+  --repo ever-guild/proof-runner \
+  --environment production
+```
+
+`apply` validates file permissions, every value, and the receipt key pair
+before it invokes `gh`. It sends secret values to `gh secret set` over stdin.
+The secret allowlist is `PROOF_RUNNER_BEARER_TOKEN` and
+`PROOF_RUNNER_RECEIPT_PRIVATE_KEY`. Domain, receipt key ID and verification
+keyring, backup policy, and runtime image use `gh variable set`; unknown or
+duplicate dotenv names are rejected. The CLI does not collect the OKX wallet or
+review email, and this deployment currently has no documented OKX credential
+environment schema, so those values must not be added to this file.
+
+The previous invocation without a subcommand is no longer accepted. To migrate
+an existing `deployment/.env`, keep it mode `0600`, make sure it contains the
+complete generated schema (including a non-empty verification keyring), and
+run `pnpm secrets apply --env-file deployment/.env --repo owner/repo --environment production`. For new
+deployments, always use `init`. Receipt-key rotation must preserve previous
+public keys in `PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS` and use a new key ID;
+rotation is intentionally separate from bootstrap.
 
 Build the untrusted-job runtime image on that same Docker engine before the
 runner starts:
@@ -41,7 +73,7 @@ runner starts:
 ```sh
 docker build --tag proof-runner-node:1 \
   --file apps/runner/docker/Dockerfile apps/runner/docker
-docker compose --env-file deployment/.env -f deployment/compose.yaml up -d --build
+docker compose --env-file deployment/.env.production -f deployment/compose.yaml up -d --build
 ```
 
 The runner image supplies its immutable skill and sandbox configuration through
@@ -67,7 +99,7 @@ metadata, normalized checks, and receipts. Verify a restart before release:
 
 ```sh
 curl --fail --silent --show-error https://"$PROOF_RUNNER_DOMAIN"/health/ready
-docker compose --env-file deployment/.env -f deployment/compose.yaml restart api
+docker compose --env-file deployment/.env.production -f deployment/compose.yaml restart api
 curl --fail --silent --show-error https://"$PROOF_RUNNER_DOMAIN"/health/ready
 ```
 
@@ -77,7 +109,7 @@ separate host/provider path in `PROOF_RUNNER_BACKUP_PATH`, not to the database
 volume. To take one manually:
 
 ```sh
-docker compose --env-file deployment/.env -f deployment/compose.yaml exec \
+docker compose --env-file deployment/.env.production -f deployment/compose.yaml exec \
   -e DATABASE_PATH=/var/lib/proof-runner/runs.sqlite \
   -e BACKUP_DIRECTORY=/backups backup \
   node /usr/local/bin/backup-sqlite.mjs
