@@ -212,9 +212,9 @@ function DemoRunPage() {
       name: "Demo receipt generated",
       status:
         completedSteps > receipt.checks.length
-          ? receipt.verdict === "FAIL" ? "FAIL"
-            : receipt.verdict === "TIMEOUT" ? "TIMEOUT"
-              : receipt.verdict === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+          ? receipt.status === "TIMEOUT" ? "TIMEOUT"
+            : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+              : receipt.verdict === "FAIL" ? "FAIL"
                 : receipt.verdict === "INCONCLUSIVE" ? "INCONCLUSIVE"
                   : "PASS"
           : completedSteps === receipt.checks.length ? "RUNNING" : "WAITING",
@@ -259,12 +259,15 @@ function DemoRunPage() {
 
   const tagLabel = kind === "broken" ? "demo-broken" : "demo-fixed"
 
-  const verdict = receipt.verdict
-  const alertStyle = verdict === "FAIL"
+  const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
+    : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+      : receipt.verdict
+
+  const alertStyle = displayVerdict === "FAIL"
     ? { border: "border-fail/40 bg-fail/10", title: "text-fail font-bold", icon: <XCircle className="w-4 h-4 text-fail" /> }
-    : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE"
+    : displayVerdict === "TIMEOUT" || displayVerdict === "INCONCLUSIVE"
       ? { border: "border-amber-500/40 bg-amber-500/10", title: "text-amber-300 font-bold", icon: <AlertTriangle className="w-4 h-4 text-amber-300" /> }
-      : verdict === "SYSTEM_ERROR"
+      : displayVerdict === "SYSTEM_ERROR"
         ? { border: "border-rose-500/40 bg-rose-500/10", title: "text-rose-300 font-bold", icon: <AlertOctagon className="w-4 h-4 text-rose-300" /> }
         : { border: "border-pass/40 bg-pass/10", title: "text-pass font-bold", icon: <CircleCheck className="w-4 h-4 text-pass" /> }
 
@@ -317,14 +320,15 @@ function DemoRunPage() {
           </Card>
 
           {isComplete && (
-            <Alert variant={verdict === "FAIL" ? "destructive" : "default"} className={`animate-fade-in-up border ${alertStyle.border}`}>
+            <Alert variant={displayVerdict === "FAIL" ? "destructive" : "default"} className={`animate-fade-in-up border ${alertStyle.border}`}>
               {alertStyle.icon}
               <AlertTitle className={alertStyle.title}>
-                Demo verdict: {receipt.verdict}
+                Demo verdict: {displayVerdict}
               </AlertTitle>
               <AlertDescription className="text-slate-300">{receipt.summary}</AlertDescription>
             </Alert>
           )}
+
 
           <div className="space-y-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Normalized demo log</h2>

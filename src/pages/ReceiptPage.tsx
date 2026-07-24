@@ -126,14 +126,16 @@ function DemoReceiptPage() {
     INCONCLUSIVE: "inconclusive",
   }
 
-  const verdict = receipt.verdict
-  const badgeVariant = badgeVariantMap[verdict] ?? "inconclusive"
+  const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
+    : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+      : receipt.verdict
+  const badgeVariant = badgeVariantMap[displayVerdict] ?? "inconclusive"
 
   React.useEffect(() => {
-    const title = `${verdict} Demo Receipt (${tagLabel}) · ProofRunner`
+    const title = `${displayVerdict} Demo Receipt (${tagLabel}) · ProofRunner`
     const desc = `Demo verification evidence receipt for ${receipt.repository} at tag ${tagLabel}.`
     updateOpenGraphMeta(title, desc, window.location.href)
-  }, [verdict, receipt.repository, tagLabel])
+  }, [displayVerdict, receipt.repository, tagLabel])
 
   const copyUrl = async () => {
     await navigator.clipboard.writeText(window.location.href)
@@ -158,36 +160,37 @@ function DemoReceiptPage() {
           Demonstration data — not a signed production receipt
         </p>
         <h1 className="text-3xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-          {verdict === "FAIL" && <XCircle className="w-8 h-8 text-fail" />}
-          {verdict === "TIMEOUT" && <Clock className="w-8 h-8 text-amber-400" />}
-          {verdict === "SYSTEM_ERROR" && <AlertOctagon className="w-8 h-8 text-rose-400" />}
-          {verdict === "INCONCLUSIVE" && <AlertTriangle className="w-8 h-8 text-amber-400" />}
-          {verdict === "PASS" && <Check className="w-8 h-8 text-pass" />}
-          Demo verification {verdict.toLowerCase()}
+          {displayVerdict === "FAIL" && <XCircle className="w-8 h-8 text-fail" />}
+          {displayVerdict === "TIMEOUT" && <Clock className="w-8 h-8 text-amber-400" />}
+          {displayVerdict === "SYSTEM_ERROR" && <AlertOctagon className="w-8 h-8 text-rose-400" />}
+          {displayVerdict === "INCONCLUSIVE" && <AlertTriangle className="w-8 h-8 text-amber-400" />}
+          {displayVerdict === "PASS" && <Check className="w-8 h-8 text-pass" />}
+          Demo verification {displayVerdict.toLowerCase()}
         </h1>
         <p className="text-slate-400 max-w-xl mx-auto">{receipt.summary}</p>
       </div>
 
       <Card className={`relative overflow-hidden mb-8 border ${
-        verdict === "FAIL" ? "border-fail/30"
-          : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE" ? "border-amber-500/30"
-            : verdict === "SYSTEM_ERROR" ? "border-rose-500/30"
+        displayVerdict === "FAIL" ? "border-fail/30"
+          : displayVerdict === "TIMEOUT" || displayVerdict === "INCONCLUSIVE" ? "border-amber-500/30"
+            : displayVerdict === "SYSTEM_ERROR" ? "border-rose-500/30"
               : "border-pass/30"
       }`}>
         <div className={`absolute -top-24 -right-24 w-64 h-64 blur-[100px] rounded-full pointer-events-none ${
-          verdict === "FAIL" ? "bg-fail/20"
-            : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE" ? "bg-amber-500/20"
-              : verdict === "SYSTEM_ERROR" ? "bg-rose-500/20"
+          displayVerdict === "FAIL" ? "bg-fail/20"
+            : displayVerdict === "TIMEOUT" || displayVerdict === "INCONCLUSIVE" ? "bg-amber-500/20"
+              : displayVerdict === "SYSTEM_ERROR" ? "bg-rose-500/20"
                 : "bg-pass/20"
         }`} />
         <CardHeader className="border-b border-white/5 bg-black/20">
           <div className="flex items-center justify-between">
             <h2 className="tracking-wider uppercase text-sm font-semibold text-slate-400">Demo receipt</h2>
             <Badge variant={badgeVariant}>
-              {verdict}
+              {displayVerdict}
             </Badge>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           <dl className="divide-y divide-white/5 text-sm font-mono">
             <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Repository</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.repository}</dd></div>

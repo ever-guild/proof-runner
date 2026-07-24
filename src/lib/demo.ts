@@ -3,15 +3,16 @@ export type DemoKind = "passed" | "broken" | "timeout" | "system-error" | "incon
 export interface DemoReceipt {
   id: DemoKind
   verdict: "PASS" | "FAIL" | "INCONCLUSIVE"
-  status?: "COMPLETED" | "TIMEOUT" | "SYSTEM_ERROR"
+  status: "COMPLETED" | "TIMEOUT" | "SYSTEM_ERROR"
   summary: string
   repository: string
   commit: string
   skill: string
   reportHash: string
   systemError?: { code: string; message: string; retryable: boolean }
-  checks: Array<{ name: string; outcome: "PASSED" | "FAILED" | "INCONCLUSIVE" }>
+  checks: Array<{ name: string; outcome: "PASSED" | "FAILED" | "INCONCLUSIVE" | "TIMEOUT" | "SYSTEM_ERROR" }>
 }
+
 
 const common = {
   repository: "ever-guild/proof-runner",
