@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { demoReceipts, getDemoKind, isCanonicalGitHubRepository } from "./demo"
+import { extractReceiptVerdict } from "../pages/ReceiptPage"
 
 describe("demo route mapping", () => {
   it("keeps the broken example visibly failed with demo-broken tag", () => {
@@ -43,5 +44,28 @@ describe("verification verdict & status categorization", () => {
     expect(isTimeoutOrSystemErrorFail("COMPLETED", "FAIL")).toBe(true)
     expect(isTimeoutOrSystemErrorFail("COMPLETED", "PASS")).toBe(false)
   })
-})
 
+  it("extracts verdict correctly from payload.report.verdict response shape", () => {
+    const signedReceipt = {
+      payload: {
+        runId: "run-123",
+        report: { verdict: "PASS" },
+      },
+      signature: "sig",
+      publicKey: "key",
+    }
+    expect(extractReceiptVerdict(signedReceipt)).toBe("PASS")
+
+    const failedReceipt = {
+      payload: {
+        runId: "run-456",
+        report: { verdict: "FAIL" },
+      },
+    }
+    expect(extractReceiptVerdict(failedReceipt)).toBe("FAIL")
+
+    const fallbackReceipt = { verdict: "INCONCLUSIVE" }
+    expect(extractReceiptVerdict(fallbackReceipt)).toBe("INCONCLUSIVE")
+    expect(extractReceiptVerdict(null)).toBe("INCONCLUSIVE")
+  })
+})
