@@ -55,7 +55,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    networks: [backend]
+    networks: [backend, egress]
 
   runner:
     build:
@@ -68,6 +68,7 @@ services:
       PROOF_RUNNER_API_URL: http://api:8787
       PROOF_RUNNER_BEARER_TOKEN: ${PROOF_RUNNER_BEARER_TOKEN:?provision a deployment-scoped token}
       PROOF_RUNNER_RUNTIME_IMAGE: ${PROOF_RUNNER_RUNTIME_IMAGE:-proof-runner-node:1}
+      PROOF_RUNNER_DOCKER_ASSET_CONTAINER: self
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
@@ -99,6 +100,7 @@ services:
 
 networks:
   edge: {}
+  egress: {}
   backend:
     internal: true
 

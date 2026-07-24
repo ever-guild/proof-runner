@@ -10,6 +10,8 @@ import test from "node:test";
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), "utf8");
 const execFile = promisify(execFileCallback);
+const service = (compose, name) =>
+  compose.match(new RegExp(`^  ${name}:\\n[\\s\\S]*?(?=^  \\w|^networks:)`, "m"))?.[0] ?? "";
 
 test("the HTTPS edge routes public API, A2MCP, and health requests to the API service", async () => {
   const caddyfile = await read("Caddyfile");
@@ -17,14 +19,23 @@ test("the HTTPS edge routes public API, A2MCP, and health requests to the API se
   assert.match(caddyfile, /reverse_proxy @api api:8787/);
 });
 
-test("Compose keeps the worker private and separates database from retained backups", async () => {
+test("Compose gives only the API egress while keeping the worker private and backups retained", async () => {
   const compose = await read("compose.yaml");
   assert.match(compose, /backend:\n    internal: true/);
-  assert.match(compose, /runner:\n[\s\S]*?networks: \[backend\]/);
-  assert.doesNotMatch(compose.match(/  runner:\n[\s\S]*?(?=\n  \w|\nnetworks:)/)?.[0] ?? "", /^    ports:/m);
+  assert.match(service(compose, "api"), /networks: \[backend, egress\]/);
+  assert.match(service(compose, "runner"), /networks: \[backend\]/);
+  assert.doesNotMatch(service(compose, "runner"), /^    ports:/m);
   assert.match(compose, /proof_runner_data:\/var\/lib\/proof-runner:ro/);
   assert.match(compose, /PROOF_RUNNER_BACKUP_PATH.*:\/backups/);
   assert.match(compose, /backup-sqlite\.mjs/);
+  assert.match(compose, /PROOF_RUNNER_DOCKER_ASSET_CONTAINER: self/);
+});
+
+test("runner image carries the pinned skill and host-daemon-visible asset volume", async () => {
+  const dockerfile = await read("Dockerfile.runner");
+  assert.match(dockerfile, /COPY skills\/node-typescript \.\/skills\/node-typescript/);
+  assert.match(dockerfile, /\/opt\/proof-runner-assets\/inspect\.cjs/);
+  assert.match(dockerfile, /VOLUME \["\/opt\/proof-runner-assets"\]/);
 });
 
 test("backup policy validates retention and snapshots SQLite with VACUUM INTO", async () => {

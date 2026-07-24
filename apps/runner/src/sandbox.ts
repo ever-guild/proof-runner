@@ -443,9 +443,8 @@ export class DockerSandbox {
     lifecycleScripts: string[],
     deadline: number,
   ): Promise<ProjectInspection> {
-    const inspectorPath = resolve(
-      fileURLToPath(new URL("../docker/inspect.cjs", import.meta.url)),
-    );
+    const assetMount = this.packagedAssetMount();
+    const inspectorPath = "/opt/proof-runner-assets/inspect.cjs";
     const result = await this.docker(
       [
         "run",
@@ -462,8 +461,7 @@ export class DockerSandbox {
         "--cpus=1",
         "--mount",
         `type=volume,src=${volume},dst=/workspace`,
-        "--mount",
-        `type=bind,src=${inspectorPath},dst=/opt/proof-runner/inspect.cjs,readonly`,
+        ...assetMount.args,
         "--env",
         `REPOSITORY_BYTES=${this.config.limits.repositoryBytes}`,
         "--env",
@@ -472,7 +470,7 @@ export class DockerSandbox {
         `LIFECYCLE_SCRIPTS=${JSON.stringify(lifecycleScripts)}`,
         this.config.runtimeImage,
         "node",
-        "/opt/proof-runner/inspect.cjs",
+        inspectorPath,
       ],
       deadline,
       true,
@@ -548,9 +546,8 @@ export class DockerSandbox {
     internalNetwork: string,
     deadline: number,
   ): Promise<void> {
-    const configPath = resolve(
-      fileURLToPath(new URL("../docker/squid.conf", import.meta.url)),
-    );
+    const assetMount = this.packagedAssetMount();
+    const configPath = "/opt/proof-runner-assets/squid.conf";
     await this.docker(
       [
         "run",
@@ -566,12 +563,11 @@ export class DockerSandbox {
         "--pids-limit=64",
         "--memory=128m",
         "--cpus=0.5",
-        "--mount",
-        `type=bind,src=${configPath},dst=/etc/squid/squid.conf,readonly`,
+        ...assetMount.args,
         this.config.proxyImage,
         "-NYC",
         "-f",
-        "/etc/squid/squid.conf",
+        configPath,
       ],
       deadline,
     );
@@ -596,6 +592,30 @@ export class DockerSandbox {
       "Allowlisted egress proxy did not become ready",
       true,
     );
+  }
+
+  private packagedAssetMount(): { args: string[] } {
+    const configured = process.env.PROOF_RUNNER_DOCKER_ASSET_CONTAINER;
+    if (configured) {
+      const container = configured === "self" ? process.env.HOSTNAME : configured;
+      if (!container) {
+        throw new RunnerError(
+          "RUNNER_FAILURE",
+          "PROOF_RUNNER_DOCKER_ASSET_CONTAINER=self requires Docker to provide HOSTNAME",
+          false,
+        );
+      }
+      return { args: ["--volumes-from", `${container}:ro`] };
+    }
+    const assetDirectory = resolve(
+      fileURLToPath(new URL("../docker", import.meta.url)),
+    );
+    return {
+      args: [
+        "--mount",
+        `type=bind,src=${assetDirectory},dst=/opt/proof-runner-assets,readonly`,
+      ],
+    };
   }
 
   private async stopContainer(name: string): Promise<void> {

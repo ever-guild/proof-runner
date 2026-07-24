@@ -30,7 +30,17 @@ docker build --tag proof-runner-node:1 \
 docker compose --env-file deployment/.env -f deployment/compose.yaml up -d --build
 ```
 
-The Caddy edge obtains HTTPS certificates automatically after public DNS for
+The runner image supplies its immutable skill and sandbox configuration through
+a read-only Docker volume shared with its disposable sibling containers. This
+avoids bind mounts from the runner container filesystem, which are not visible
+to the host Docker daemon. Do not override
+`PROOF_RUNNER_DOCKER_ASSET_CONTAINER=self` unless the replacement names the
+runner container on that same daemon.
+
+The API alone also joins an un-published egress network so inspection can fetch
+public GitHub metadata; the runner and every build/test sandbox remain on the
+private network except for the short-lived allowlisted proxy during clone and
+dependency installation. The Caddy edge obtains HTTPS certificates automatically after public DNS for
 `PROOF_RUNNER_DOMAIN` points to the host. For a separate API/runner host, keep
 the runner private and replace `http://runner:8788` and `http://api:8787` with
 the private service DNS names; no internal endpoint may be internet-routable.
