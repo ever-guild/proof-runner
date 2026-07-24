@@ -1,15 +1,21 @@
 {
-  "name": "@proof-runner/runner",
+  "name": "@ever-guild/proof-runner-runner",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src test",
-    "test": "vitest run",
+    "start": "node dist/index.js",
+    "test": "vitest run --config ../../vitest.packages.config.ts",
+    "test:integration": "PROOF_RUNNER_DOCKER_TESTS=1 vitest run --config ../../vitest.packages.config.ts test/docker.integration.test.ts",
+    "benchmark": "node dist/benchmark.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@proof-runner/schema": "workspace:*"
+    "@ever-guild/proof-runner-schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1"
   }
 }

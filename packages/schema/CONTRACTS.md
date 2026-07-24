@@ -1,7 +1,7 @@
 # ProofRunner contract version 1.0
 
 All JSON messages carry the literal `contractVersion: "1.0"`. Consumers must
-reject any other version. The Zod schemas exported by `@proof-runner/schema`
+reject any other version. The Zod schemas exported by `@ever-guild/proof-runner-schema`
 are authoritative; this document fixes their HTTP bindings and operational
 semantics.
 

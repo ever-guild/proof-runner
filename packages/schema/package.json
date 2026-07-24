@@ -1,5 +1,5 @@
 {
-  "name": "@proof-runner/schema",
+  "name": "@ever-guild/proof-runner-schema",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src test",
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.packages.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

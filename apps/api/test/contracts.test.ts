@@ -4,7 +4,7 @@ import {
   InternalDispatchRequestSchema,
   MOCK_RUN_RESPONSES,
   RunResponseSchema,
-} from "@proof-runner/schema";
+} from "@ever-guild/proof-runner-schema";
 
 describe("API contract consumer", () => {
   it.each(Object.entries(MOCK_RUN_RESPONSES))("accepts the %s mock", (_, mock) => {

@@ -1,0 +1,32 @@
+{
+  "name": "node-typescript",
+  "version": "1",
+  "packageManagers": {
+    "npm": {
+      "lockfile": "package-lock.json",
+      "install": ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
+    },
+    "pnpm": {
+      "lockfile": "pnpm-lock.yaml",
+      "install": ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]
+    }
+  },
+  "commands": {
+    "npm": {
+      "build": ["npm", "run", "build", "--if-present"],
+      "test": ["npm", "test", "--if-present"]
+    },
+    "pnpm": {
+      "build": ["pnpm", "run", "--if-present", "build"],
+      "test": ["pnpm", "run", "--if-present", "test"]
+    }
+  },
+  "lifecycleScripts": [
+    "preinstall",
+    "install",
+    "postinstall",
+    "prepublish",
+    "prepare",
+    "pnpm:devPreinstall"
+  ]
+}
