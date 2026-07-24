@@ -1,0 +1,15 @@
+{
+  "schema_version": "prvc.release/v1",
+  "prvc_version": "0.1.0",
+  "suite": "smoke",
+  "total_cases": 50,
+  "total_variants": 59,
+  "level": "IMPORTED",
+  "fixture_signature": {
+    "algorithm": "Ed25519",
+    "key_material": "RFC8032 test vector",
+    "purpose": "reproducible fixture integrity only",
+    "publisher_authenticity": false,
+    "notice": "Anyone can recreate and re-sign this fixture; do not trust this key as publisher identity."
+  }
+}

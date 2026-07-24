@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofrunner.org/schemas/prvc/oracle.schema.json",
+  "title": "PRVC Oracle Schema",
+  "type": "object",
+  "required": ["schema_version", "case_id", "variants"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "prvc.oracle/v1" },
+    "case_id": { "type": "string" },
+    "variants": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["expected"],
+        "properties": {
+          "expected": {
+            "type": "object",
+            "required": ["terminal_status", "verdict", "reason_code"],
+            "properties": {
+              "terminal_status": { "type": "string", "enum": ["COMPLETED", "TIMEOUT", "RESOURCE_EXHAUSTED", "POLICY_BLOCKED", "SYSTEM_ERROR", "REJECTED"] },
+              "verdict": { "type": "string", "enum": ["PASS", "FAIL", "INCONCLUSIVE"] },
+              "reason_code": { "type": "string" },
+              "stages": { "type": "object" },
+              "tests": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "relations": { "type": "array", "items": { "type": "object" } }
+  }
+}

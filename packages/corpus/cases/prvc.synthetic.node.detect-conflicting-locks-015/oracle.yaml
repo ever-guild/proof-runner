@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.detect-conflicting-locks-015
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: CONFLICTING_LOCKFILES
+      terminal_status: REJECTED
+      verdict: INCONCLUSIVE

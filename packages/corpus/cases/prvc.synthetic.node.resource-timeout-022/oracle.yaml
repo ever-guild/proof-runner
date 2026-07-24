@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.resource-timeout-022
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: TIMEOUT
+      terminal_status: TIMEOUT
+      verdict: INCONCLUSIVE

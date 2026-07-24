@@ -1,0 +1,41 @@
+case_id: prvc.synthetic.node.resource-timeout-022
+description: PRVC validation case prvc.synthetic.node.resource-timeout-022
+execution_profile:
+  limits:
+    cpu_time_seconds: 90
+    memory_bytes: 2147483648
+    pids: 128
+    wall_time_seconds: 120
+  profile_id: node-npm/v1
+  runtime:
+    architecture: linux/amd64
+    image: >-
+      node:22-alpine@sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+integrity:
+  case_hash_algorithm: sha256
+  case_hash_canonicalization: RFC8785
+  sha256: 050569734f57cd08347eafcedca34bc4984527a2a19eb91c03332e6ffd9fbbb0
+licenses:
+  dataset:
+    expression: generated fixture
+oracle_ref: oracle.yaml
+schema_version: prvc.case/v1
+source:
+  kind: synthetic
+subject:
+  language: javascript
+  package_manager: npm
+  project_type: node
+suite:
+  - smoke
+  - sandbox
+title: Resource wall time timeout
+variants:
+  default:
+    request:
+      verification_skill:
+        digest: >-
+          sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+        name: node-typescript
+        version: 1.0.0
+visibility: public

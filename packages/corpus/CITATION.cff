@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: "ProofRunner Corpus"
+message: "If you use this benchmark dataset or harness, please cite it as below."
+type: dataset
+authors:
+  - family-names: "ProofRunner Team"
+    given-names: "Ilyar"
+version: 0.1.0
+date-released: 2026-07-24
+repository-code: "https://github.com/ever-guild/proof-runner-agent"
+license: MIT
