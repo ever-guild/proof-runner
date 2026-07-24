@@ -13,7 +13,8 @@ export const RuntimeImageDigestSchema = z
 export const RepositoryUrlSchema = z
   .string()
   .url()
-  .regex(/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
+  .regex(/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
+  .refine((value) => !value.endsWith(".git"));
 
 export const RepositoryRefSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("branch"), value: z.string().min(1).max(255) }),

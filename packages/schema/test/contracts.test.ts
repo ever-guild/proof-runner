@@ -4,6 +4,7 @@ import {
   CONTRACT_VERSION,
   InspectRepositoryA2McpResponseSchema,
   InternalDispatchRequestSchema,
+  isInternalServiceUrl,
   MOCK_RUN_RESPONSES,
   PUBLIC_API_ROUTES,
   RunResponseSchema,
@@ -119,6 +120,14 @@ describe("frozen internal runner contracts", () => {
         contractVersion: "2.0",
       }).success,
     ).toBe(false);
+  });
+
+  it("only accepts safe internal callback base URLs", () => {
+    expect(isInternalServiceUrl("https://runner.internal.example")).toBe(true);
+    expect(isInternalServiceUrl("http://127.0.0.1:8787")).toBe(true);
+    expect(isInternalServiceUrl("http://127.0.0.1:8787@evil.example")).toBe(false);
+    expect(isInternalServiceUrl("http://runner.internal.example")).toBe(false);
+    expect(isInternalServiceUrl("not a URL")).toBe(false);
   });
 });
 
