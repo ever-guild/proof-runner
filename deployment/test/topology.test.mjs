@@ -19,6 +19,18 @@ test("the HTTPS edge routes public API, A2MCP, and health requests to the API se
   assert.match(caddyfile, /reverse_proxy @api api:8787/);
 });
 
+test("nginx config routes SPA fallback for human users, proxies bot crawlers to API, and forbids public /internal/ proxy", async () => {
+  const nginx = await read("nginx.conf");
+  assert.match(nginx, /location \/api\//);
+  assert.match(nginx, /proxy_pass http:\/\/api:8787;/);
+  assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\//);
+  assert.match(nginx, /facebookexternalhit\|twitterbot\|slackbot\|linkedinbot\|bot\|crawler\|spider/);
+  assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html;/);
+  assert.doesNotMatch(nginx, /location \/internal\//);
+  assert.doesNotMatch(nginx, /proxy_pass http:\/\/api:8787\/internal\//);
+});
+
+
 test("Compose gives only the API egress while keeping the worker private and backups retained", async () => {
   const compose = await read("compose.yaml");
   assert.match(compose, /backend:\n    internal: true/);
