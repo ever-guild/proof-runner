@@ -11,9 +11,16 @@ import { getReceipt } from "../lib/api"
 export function ReceiptPage() {
   const { id } = useParams()
   const location = useLocation()
-  const isDemo = id === "passed" || id === "broken" || location.pathname.startsWith("/examples/")
+  const isDemo =
+    id === "passed" ||
+    id === "broken" ||
+    id === "timeout" ||
+    id === "system-error" ||
+    id === "inconclusive" ||
+    location.pathname.startsWith("/examples/")
   return isDemo ? <DemoReceiptPage /> : <LiveReceiptPage id={id} />
 }
+
 
 function updateOpenGraphMeta(title: string, description: string, url: string) {
   document.title = title
@@ -116,7 +123,8 @@ function DemoReceiptPage() {
   const kind = getDemoKind(id, location.pathname)
   const receipt = demoReceipts[kind]
   const [copyLabel, setCopyLabel] = React.useState("Copy demo URL")
-  const tagLabel = kind === "broken" ? "demo-broken" : "demo-fixed"
+  const tagLabel = receipt.gitTag
+
 
   const badgeVariantMap: Record<string, "pass" | "fail" | "timeout" | "system_error" | "inconclusive"> = {
     PASS: "pass",

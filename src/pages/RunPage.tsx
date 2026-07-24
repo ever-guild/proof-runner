@@ -55,8 +55,9 @@ function LiveRunPage({ id }: { id: string | undefined }) {
 
   const isTimeout = run.status === "TIMEOUT"
   const isSystemError = run.status === "SYSTEM_ERROR"
-  const isFail = run.verdict === "FAIL" && !isTimeout && !isSystemError
+  const isFail = isNonFailStatus(run.status, run.verdict)
   const isPass = run.verdict === "PASS" && !isTimeout && !isSystemError
+
 
   const getVerdictIcon = () => {
     if (isPass) return <CircleCheck className="w-5 h-5 text-pass" />
@@ -257,7 +258,8 @@ function DemoRunPage() {
               "Demo execution complete",
             ]
 
-  const tagLabel = kind === "broken" ? "demo-broken" : "demo-fixed"
+  const tagLabel = receipt.gitTag
+
 
   const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
     : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
@@ -329,7 +331,6 @@ function DemoRunPage() {
             </Alert>
           )}
 
-
           <div className="space-y-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Normalized demo log</h2>
             <Terminal logs={logs.slice(0, Math.min(completedSteps, logs.length))} className="h-[300px]" />
@@ -348,7 +349,7 @@ function DemoRunPage() {
               <div><p className="text-slate-500 text-xs">Elapsed</p><p>00:0{Math.min(completedSteps, 9)}s (&lt; 45s limit)</p></div>
               {isComplete && (
                 <Button asChild className="w-full">
-                  <Link to={`/receipts/${kind}`}>View demo receipt</Link>
+                  <Link to={`/examples/${kind}`}>View demo receipt</Link>
                 </Button>
               )}
             </CardContent>

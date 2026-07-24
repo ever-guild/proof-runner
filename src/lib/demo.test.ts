@@ -1,24 +1,40 @@
 import { describe, expect, it } from "vitest"
-import { demoReceipts, getDemoKind, isCanonicalGitHubRepository } from "./demo"
+import { demoReceipts, getDemoKind, isCanonicalGitHubRepository, isNonFailStatus } from "./demo"
 import { extractReceiptVerdict } from "../pages/ReceiptPage"
 
 describe("demo route mapping", () => {
   it("keeps the broken example visibly failed with demo-broken tag", () => {
     expect(getDemoKind(undefined, "/examples/broken")).toBe("broken")
     expect(demoReceipts.broken.verdict).toBe("FAIL")
+    expect(demoReceipts.broken.gitTag).toBe("demo-broken")
     expect(demoReceipts.broken.checks).toContainEqual({
       name: "Unit tests",
       outcome: "FAILED",
     })
     expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner")
-    expect(demoReceipts.broken.commit).toBe("91bd7a2f7dd6537202dfaa5bdd6a2b35b06a1670")
+    expect(demoReceipts.broken.commit).toBe("339a3effb97cac6073cd5cf8dab746eca25cd255")
   })
 
   it("maps pass aliases to the passing fixture with demo-fixed tag", () => {
     expect(getDemoKind("demo-123", "/receipts/demo-123")).toBe("passed")
     expect(getDemoKind(undefined, "/examples/passed")).toBe("passed")
     expect(demoReceipts.passed.verdict).toBe("PASS")
-    expect(demoReceipts.passed.commit).toBe("4c82fa189cb846189ff7224519a8497aeb78195d")
+    expect(demoReceipts.passed.gitTag).toBe("demo-fixed")
+    expect(demoReceipts.passed.commit).toBe("bd3e75e74c099b9fc4eba5504f91dcad4969b60e")
+  })
+
+  it("maps timeout, system-error, and inconclusive demo routes correctly", () => {
+    expect(getDemoKind("timeout", "/examples/timeout")).toBe("timeout")
+    expect(demoReceipts.timeout.status).toBe("TIMEOUT")
+    expect(demoReceipts.timeout.gitTag).toBe("demo-timeout")
+
+    expect(getDemoKind("system-error", "/examples/system-error")).toBe("system-error")
+    expect(demoReceipts["system-error"].status).toBe("SYSTEM_ERROR")
+    expect(demoReceipts["system-error"].gitTag).toBe("demo-system-error")
+
+    expect(getDemoKind("inconclusive", "/examples/inconclusive")).toBe("inconclusive")
+    expect(demoReceipts.inconclusive.verdict).toBe("INCONCLUSIVE")
+    expect(demoReceipts.inconclusive.gitTag).toBe("demo-inconclusive")
   })
 })
 
@@ -32,17 +48,11 @@ describe("repository input validation", () => {
 })
 
 describe("verification verdict & status categorization", () => {
-  it("ensures TIMEOUT and SYSTEM_ERROR are categorized as non-FAIL states", () => {
-    const isTimeoutOrSystemErrorFail = (status: string, verdict: string | null) => {
-      const isTimeout = status === "TIMEOUT"
-      const isSystemError = status === "SYSTEM_ERROR"
-      return verdict === "FAIL" && !isTimeout && !isSystemError
-    }
-
-    expect(isTimeoutOrSystemErrorFail("TIMEOUT", "INCONCLUSIVE")).toBe(false)
-    expect(isTimeoutOrSystemErrorFail("SYSTEM_ERROR", "INCONCLUSIVE")).toBe(false)
-    expect(isTimeoutOrSystemErrorFail("COMPLETED", "FAIL")).toBe(true)
-    expect(isTimeoutOrSystemErrorFail("COMPLETED", "PASS")).toBe(false)
+  it("ensures TIMEOUT and SYSTEM_ERROR are categorized as non-FAIL states via isNonFailStatus", () => {
+    expect(isNonFailStatus("TIMEOUT", "INCONCLUSIVE")).toBe(false)
+    expect(isNonFailStatus("SYSTEM_ERROR", "INCONCLUSIVE")).toBe(false)
+    expect(isNonFailStatus("COMPLETED", "FAIL")).toBe(true)
+    expect(isNonFailStatus("COMPLETED", "PASS")).toBe(false)
   })
 
   it("extracts verdict correctly from payload.report.verdict response shape", () => {
