@@ -1,6 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   CONTRACT_VERSION,
+  canonicalize,
+  INTERNAL_RUNNER_ROUTES,
+  InternalCancellationResponseSchema,
+  InternalDispatchResponseSchema,
+  type InternalDispatchRequest,
   type InternalResultDeliveryRequest,
   type NormalizedCheck,
   type SignedReceipt,
@@ -9,96 +14,312 @@ import {
 import { RunStore } from "./store.js";
 
 export interface RunnerClient {
-  dispatch(body: { contractVersion: "1.0"; runId: string; lease: { leaseId: string; leaseExpiresAt: string }; request: unknown }): Promise<void>;
+  dispatch(request: InternalDispatchRequest): Promise<void>;
   cancel(runId: string): Promise<void>;
 }
 
-export class HttpRunnerClient implements RunnerClient {
-  constructor(private readonly url: string, private readonly token: string) {}
-  private async request(path: string, method: string, body?: unknown): Promise<void> {
-    const init: RequestInit = {
-      method, headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    };
-    if (body !== undefined) init.body = JSON.stringify(body);
-    const response = await fetch(`${this.url}${path}`, init);
-    if (!response.ok) throw new Error("RUNNER_UNAVAILABLE");
-  }
-  dispatch(body: Parameters<RunnerClient["dispatch"]>[0]): Promise<void> { return this.request("/internal/v1/runs", "POST", body); }
-  cancel(runId: string): Promise<void> { return this.request(`/internal/v1/runs/${encodeURIComponent(runId)}/cancel`, "POST", { contractVersion: CONTRACT_VERSION, reason: "LEASE_EXPIRED", requestedAt: new Date().toISOString() }); }
+export interface ReceiptIssuer {
+  issue(report: VerificationReport): SignedReceipt;
 }
 
-export interface ReceiptIssuer { issue(report: VerificationReport): SignedReceipt; }
+export class RunnerClientError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    readonly retryable: boolean,
+  ) {
+    super(code ?? "RUNNER_REQUEST_FAILED");
+    this.name = "RunnerClientError";
+  }
+}
 
+export type ResultDeliveryOutcome =
+  | "ACCEPTED"
+  | "LEASE_EXPIRED"
+  | "RESULT_CONFLICT"
+  | "RUN_NOT_FOUND";
+
+export type HeartbeatOutcome =
+  | { kind: "ACCEPTED"; leaseExpiresAt: string }
+  | { kind: "LEASE_EXPIRED" }
+  | { kind: "RUN_NOT_FOUND" };
+
+type ActiveRun = {
+  id: string;
+  leaseId: string;
+  expiresAt: number;
+};
+
+const runnerClientError = async (response: Response): Promise<RunnerClientError> => {
+  let code: string | null = null;
+  let retryable = false;
+  try {
+    const body = await response.json() as {
+      error?: { code?: unknown; retryable?: unknown };
+    };
+    if (typeof body.error?.code === "string") code = body.error.code;
+    if (typeof body.error?.retryable === "boolean") {
+      retryable = body.error.retryable;
+    }
+  } catch {
+    // A malformed error response must not be mistaken for a known busy runner.
+  }
+  return new RunnerClientError(response.status, code, retryable);
+};
+
+const isRunnerUnavailable = (error: unknown): boolean => {
+  if (error instanceof RunnerClientError) {
+    return error.code === "RUNNER_UNAVAILABLE" && error.retryable;
+  }
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; retryable?: unknown };
+  return candidate.code === "RUNNER_UNAVAILABLE" && candidate.retryable === true;
+};
+
+export class HttpRunnerClient implements RunnerClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly bearerToken: string,
+  ) {}
+
+  async dispatch(request: InternalDispatchRequest): Promise<void> {
+    const response = await this.send(
+      INTERNAL_RUNNER_ROUTES.dispatch.path,
+      "POST",
+      request,
+    );
+    InternalDispatchResponseSchema.parse(await response.json());
+  }
+
+  async cancel(runId: string): Promise<void> {
+    const response = await this.send(
+      `/internal/v1/runs/${encodeURIComponent(runId)}/cancel`,
+      "POST",
+      {
+        contractVersion: CONTRACT_VERSION,
+        reason: "LEASE_EXPIRED",
+        requestedAt: new Date().toISOString(),
+      },
+    );
+    InternalCancellationResponseSchema.parse(await response.json());
+  }
+
+  private async send(
+    path: string,
+    method: "POST",
+    body: unknown,
+  ): Promise<Response> {
+    const response = await fetch(`${this.baseUrl.replace(/\/+$/, "")}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${this.bearerToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw await runnerClientError(response);
+    return response;
+  }
+}
+
+/**
+ * Owns the active lease and exposes one operation for each transition that
+ * crosses the API↔runner seam. SQLite remains the durable state authority.
+ */
 export class Orchestrator {
-  private active: { id: string; leaseId: string; expiresAt: number } | null = null;
+  private active: ActiveRun | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private dispatchTimer: ReturnType<typeof setTimeout> | null = null;
+  private dispatchBlockedUntil = 0;
 
   constructor(
     private readonly store: RunStore,
     private readonly runner: RunnerClient,
-    private readonly receiptIssuer: ReceiptIssuer,
-    private readonly leaseMs = 30_000,
+    private readonly receipts: ReceiptIssuer,
+    private readonly leaseDurationMs = 30_000,
   ) {}
 
   start(): void {
-    this.store.recoverInterruptedRuns();
-    this.timer = setInterval(() => void this.expireLease(), 250);
+    const interrupted = this.store.recoverInterruptedRuns();
+    this.timer = setInterval(() => {
+      void this.expireLease();
+    }, Math.min(1_000, Math.max(100, Math.floor(this.leaseDurationMs / 2))));
     this.timer.unref();
-    void this.dispatchNext();
+    if (interrupted.length === 0) {
+      void this.dispatchNext();
+      return;
+    }
+    for (const runId of interrupted) {
+      void this.runner.cancel(runId).catch(() => undefined);
+    }
+    this.deferDispatch(this.leaseDurationMs);
   }
 
-  stop(): void { if (this.timer) clearInterval(this.timer); if (this.retryTimer) clearTimeout(this.retryTimer); this.timer = null; this.retryTimer = null; }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    if (this.dispatchTimer) clearTimeout(this.dispatchTimer);
+    this.timer = null;
+    this.dispatchTimer = null;
+    this.dispatchBlockedUntil = 0;
+  }
 
   async dispatchNext(): Promise<void> {
-    if (this.active) return;
+    if (this.active || Date.now() < this.dispatchBlockedUntil) return;
+
     const run = this.store.claimNext();
     if (!run) return;
+
     const leaseId = randomUUID();
-    const expiresAt = Date.now() + this.leaseMs;
+    const expiresAt = Date.now() + this.leaseDurationMs;
     this.active = { id: run.response.id, leaseId, expiresAt };
+
     try {
-      await this.runner.dispatch({ contractVersion: CONTRACT_VERSION, runId: run.response.id, lease: { leaseId, leaseExpiresAt: new Date(expiresAt).toISOString() }, request: run.request });
-    } catch {
-      this.store.requeue(run.response.id);
+      await this.runner.dispatch({
+        contractVersion: CONTRACT_VERSION,
+        runId: run.response.id,
+        lease: {
+          leaseId,
+          leaseExpiresAt: new Date(expiresAt).toISOString(),
+        },
+        request: run.request,
+      });
+    } catch (error) {
+      const activeLease = this.active;
+      const quarantineExpiresAt =
+        activeLease?.id === run.response.id && activeLease.leaseId === leaseId
+          ? activeLease.expiresAt
+          : expiresAt;
       this.active = null;
-      this.retryTimer = setTimeout(() => { this.retryTimer = null; void this.dispatchNext(); }, 1_000);
+      if (isRunnerUnavailable(error) && this.store.requeue(run.response.id)) {
+        // A 503 from the runner is definitive: it did not accept this run, so
+        // retain its FIFO position and wait for the prior cancellation cleanup
+        // to release the single runner slot.
+        this.deferDispatch(
+          Math.min(1_000, Math.max(25, Math.floor(this.leaseDurationMs / 4))),
+        );
+        return;
+      }
+      this.store.systemError(
+        run.response.id,
+        "RUNNER_UNAVAILABLE",
+        "The runner did not accept the run.",
+        true,
+      );
+      // A transport failure is ambiguous: the runner may have accepted the
+      // request before its response was lost. Ask it to cancel and retain the
+      // original lease window before allowing another run to start.
+      void this.runner.cancel(run.response.id).catch(() => undefined);
+      this.deferDispatch(Math.max(0, quarantineExpiresAt - Date.now()));
     }
   }
 
-  heartbeat(runId: string, leaseId: string, stage: NormalizedCheck["stage"] | null): string | null {
-    if (!this.active || this.active.id !== runId || this.active.leaseId !== leaseId || Date.now() >= this.active.expiresAt) return null;
-    this.active.expiresAt = Date.now() + this.leaseMs;
-    return this.store.heartbeat(runId, stage) ? new Date(this.active.expiresAt).toISOString() : null;
+  heartbeat(
+    runId: string,
+    leaseId: string,
+    stage: NormalizedCheck["stage"] | null,
+  ): HeartbeatOutcome {
+    if (!this.store.get(runId)) return { kind: "RUN_NOT_FOUND" };
+    if (!this.isActiveLease(runId, leaseId)) return { kind: "LEASE_EXPIRED" };
+    if (!this.store.heartbeat(runId, stage)) return { kind: "LEASE_EXPIRED" };
+
+    const expiresAt = Date.now() + this.leaseDurationMs;
+    this.active = { id: runId, leaseId, expiresAt };
+    return { kind: "ACCEPTED", leaseExpiresAt: new Date(expiresAt).toISOString() };
   }
 
-  async result(runId: string, result: InternalResultDeliveryRequest): Promise<boolean> {
-    if (!this.active || this.active.id !== runId || this.active.leaseId !== result.leaseId || Date.now() >= this.active.expiresAt) return false;
-    let stored;
+  async result(
+    runId: string,
+    result: InternalResultDeliveryRequest,
+  ): Promise<ResultDeliveryOutcome> {
+    const resultFingerprint = createHash("sha256").update(canonicalize(result)).digest("hex");
+    const persisted = this.store.resultDeliveryOutcome(runId, resultFingerprint);
+    if (persisted !== "PENDING") return persisted;
+    if (!this.isActiveLease(runId, result.leaseId)) return "LEASE_EXPIRED";
+
     if (result.status === "SYSTEM_ERROR") {
-      stored = this.store.systemError(runId, result.systemError.code, "The runner reported a system error.", result.systemError.retryable);
+      if (!this.store.systemError(
+        runId,
+        "RUNNER_FAILURE",
+        "The runner could not complete this run.",
+        result.systemError.retryable,
+        resultFingerprint,
+      )) {
+        const outcome = this.store.resultDeliveryOutcome(runId, resultFingerprint);
+        return outcome === "PENDING" ? "LEASE_EXPIRED" : outcome;
+      }
     } else {
-      const active = this.store.get(runId);
-      if (!active) return false;
       try {
-        stored = this.store.complete(runId, result.status, result.report, this.receiptIssuer.issue(result.report));
+        const receipt = this.receipts.issue(result.report);
+        if (!this.store.complete(
+          runId,
+          result.status,
+          result.report,
+          receipt,
+          resultFingerprint,
+        )) {
+          const outcome = this.store.resultDeliveryOutcome(runId, resultFingerprint);
+          if (outcome !== "PENDING") return outcome;
+          throw new Error("RESULT_PERSISTENCE_FAILED");
+        }
       } catch {
-        stored = this.store.systemError(runId, "RECEIPT_ISSUANCE_FAILED", "The receipt could not be issued.", true);
+        this.store.systemError(
+          runId,
+          "RECEIPT_ISSUANCE_FAILED",
+          "The verification receipt could not be issued.",
+          true,
+        );
+        this.active = null;
+        await this.dispatchNext();
+        return "LEASE_EXPIRED";
       }
     }
-    if (!stored) return false;
+
     this.active = null;
     await this.dispatchNext();
-    return true;
+    return "ACCEPTED";
+  }
+
+  private isActiveLease(runId: string, leaseId: string): boolean {
+    return Boolean(
+      this.active &&
+        this.active.id === runId &&
+        this.active.leaseId === leaseId &&
+        Date.now() < this.active.expiresAt,
+    );
   }
 
   private async expireLease(): Promise<void> {
     if (!this.active || Date.now() < this.active.expiresAt) return;
+
     const expired = this.active;
     this.active = null;
-    try { await this.runner.cancel(expired.id); } catch { /* local terminal state is authoritative */ }
-    this.store.systemError(expired.id, "LEASE_EXPIRED", "The runner lease expired before completion.", true);
+    try {
+      await this.runner.cancel(expired.id);
+    } catch {
+      // The persisted terminal state below is authoritative if the runner is down.
+    }
+    this.store.systemError(
+      expired.id,
+      "LEASE_EXPIRED",
+      "The runner lease expired before completion.",
+      true,
+    );
     await this.dispatchNext();
+  }
+
+  private deferDispatch(delayMs = 1_000): void {
+    this.dispatchBlockedUntil = Math.max(this.dispatchBlockedUntil, Date.now() + delayMs);
+    if (this.dispatchTimer) return;
+    this.dispatchTimer = setTimeout(() => {
+      this.dispatchTimer = null;
+      const remaining = this.dispatchBlockedUntil - Date.now();
+      if (remaining > 0) {
+        this.deferDispatch(remaining);
+        return;
+      }
+      void this.dispatchNext();
+    }, delayMs);
+    this.dispatchTimer.unref();
   }
 }

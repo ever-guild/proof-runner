@@ -29,9 +29,21 @@ docker build \
   apps/runner/docker
 
 export PROOF_RUNNER_BEARER_TOKEN="$(openssl rand -hex 32)"
+export PROOF_RUNNER_API_URL="https://api.internal.example"
 pnpm --filter @ever-guild/proof-runner-runner build
 pnpm --filter @ever-guild/proof-runner-runner start
 ```
+
+## API callbacks
+
+`PROOF_RUNNER_API_URL` is required when starting the runner's HTTP control
+plane. It identifies the private API origin where the runner sends leased
+heartbeats and one terminal result callback. Standalone sandbox work such as
+the benchmark may omit it. The runner never puts the bearer token into a
+repository checkout, sandbox, report, or receipt. In production both this URL
+and the API's `PROOF_RUNNER_RUNNER_URL` must use internal HTTPS;
+`http://127.0.0.1:<port>` is accepted solely for local development and
+integration tests.
 
 The Squid default is pinned by digest. The runtime image may likewise be
 supplied by digest through `PROOF_RUNNER_RUNTIME_IMAGE`; every report records

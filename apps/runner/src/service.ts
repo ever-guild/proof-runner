@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import {
   CONTRACT_VERSION,
+  canonicalize,
   type InternalDispatchRequest,
   type InternalResultDeliveryRequest,
 } from "@ever-guild/proof-runner-schema";
@@ -8,7 +9,11 @@ import type { RunnerConfig } from "./config.js";
 import { RunnerError } from "./errors.js";
 import type { SandboxExecution } from "./sandbox.js";
 import { DockerSandbox } from "./sandbox.js";
-import { callbackClientFor, type ApiCallbackClient } from "./api-client.js";
+import {
+  ApiCallbackError,
+  callbackClientFor,
+  type ApiCallbackClient,
+} from "./api-client.js";
 
 export type TransportErrorCode =
   | "UNAUTHORIZED"
@@ -56,7 +61,14 @@ interface StoredRun {
 const sameResult = (
   left: InternalResultDeliveryRequest,
   right: InternalResultDeliveryRequest,
-): boolean => JSON.stringify(left) === JSON.stringify(right);
+): boolean => canonicalize(left) === canonicalize(right);
+
+const RESULT_DELIVERY_RETRY_DELAY_MS = 100;
+
+const isRetryableResultDeliveryFailure = (error: unknown): boolean => {
+  if (!(error instanceof ApiCallbackError)) return true;
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+};
 
 export class RunnerService {
   private readonly runs = new Map<string, StoredRun>();
@@ -67,7 +79,9 @@ export class RunnerService {
     private readonly sandbox: Pick<DockerSandbox, "execute"> = new DockerSandbox(
       config,
     ),
-    private readonly callback: ApiCallbackClient | null = callbackClientFor(config),
+    private readonly callback: ApiCallbackClient | null = config.apiCallbackUrl
+      ? callbackClientFor(config)
+      : null,
   ) {}
 
   authenticate(header: string | undefined): void {
@@ -238,16 +252,32 @@ export class RunnerService {
   }
 
   private async execute(run: StoredRun): Promise<void> {
-    const heartbeatIntervalMs = Math.max(50, Math.min(1_000, Math.floor(
-      Math.max(100, new Date(run.leaseExpiresAt).getTime() - Date.now()) / 2,
-    )));
-    const heartbeat = setInterval(() => {
-      void this.callback?.heartbeat(
+    const notifyHeartbeat = (): void => {
+      if (!this.callback) return;
+      void this.callback.heartbeat(
         run.dispatch.runId,
         run.dispatch.lease.leaseId,
         run.activeStage,
-      ).then((leaseExpiresAt) => { run.leaseExpiresAt = leaseExpiresAt; }).catch(() => undefined);
-    }, heartbeatIntervalMs);
+      ).then(({ leaseExpiresAt, cancellationRequested }) => {
+        run.leaseExpiresAt = leaseExpiresAt;
+        if (cancellationRequested) {
+          run.cancellationRequested = true;
+          run.abort.abort();
+        }
+      }).catch(() => undefined);
+    };
+    const heartbeat = setInterval(
+      notifyHeartbeat,
+      Math.max(
+        1,
+        Math.min(
+          Math.floor(this.config.leaseExtensionMs / 2),
+          Math.floor(
+            Math.max(1, new Date(run.leaseExpiresAt).getTime() - Date.now()) / 2,
+          ),
+        ),
+      ),
+    );
     heartbeat.unref();
     let execution: SandboxExecution;
     try {
@@ -265,17 +295,16 @@ export class RunnerService {
         },
         onStage: (stage) => {
           run.activeStage = stage;
-          void this.callback?.heartbeat(run.dispatch.runId, run.dispatch.lease.leaseId, stage)
-            .then((leaseExpiresAt) => { run.leaseExpiresAt = leaseExpiresAt; }).catch(() => undefined);
+          notifyHeartbeat();
         },
       });
-    } catch (error) {
+    } catch {
       execution = {
         status: "SYSTEM_ERROR",
         report: null,
         systemError: {
           code: "RUNNER_FAILURE",
-          message: error instanceof Error ? error.message : "Unknown runner failure",
+          message: "The runner could not complete this verification.",
           retryable: true,
         },
       };
@@ -311,16 +340,42 @@ export class RunnerService {
     }
     run.status = execution.status;
     run.activeStage = null;
+    clearInterval(heartbeat);
+    // The sandbox has already completed. Release this runner slot before the
+    // terminal callback resolves so the API's next dispatch cannot race an
+    // otherwise-finished run as still active.
+    this.release(run.dispatch.runId);
+    if (this.callback && run.result) {
+      await this.deliverRetainedResult(run);
+    }
+  }
+
+  /**
+   * Result payloads are immutable and the API persists a fingerprint, so a
+   * retry after a lost response is safe. Do not retry definitive 4xx replies:
+   * they mean the API has either expired the lease or rejected this result.
+   */
+  private async deliverRetainedResult(run: StoredRun): Promise<void> {
+    const callback = this.callback;
     const result = run.result;
-    if (this.callback && result) {
-      while (Date.now() < new Date(run.leaseExpiresAt).getTime()) {
-        try { await this.callback.result(run.dispatch.runId, result); break; } catch {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+    if (!callback || !result) return;
+
+    while (Date.now() < new Date(run.leaseExpiresAt).getTime()) {
+      try {
+        await callback.result(run.dispatch.runId, result);
+        return;
+      } catch (error) {
+        if (!isRetryableResultDeliveryFailure(error)) return;
+        // A heartbeat already in flight when execution finished may extend the
+        // API lease after this delivery attempt fails. Re-read the shared lease
+        // instead of holding the dispatch-time deadline for the whole loop.
+        const remaining = new Date(run.leaseExpiresAt).getTime() - Date.now();
+        if (remaining <= 0) return;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, Math.min(RESULT_DELIVERY_RETRY_DELAY_MS, remaining));
+        });
       }
     }
-    clearInterval(heartbeat);
-    this.release(run.dispatch.runId);
   }
 
   private find(runId: string): StoredRun {

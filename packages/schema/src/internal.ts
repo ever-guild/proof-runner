@@ -12,6 +12,53 @@ import {
 } from "./public.js";
 
 export const INTERNAL_AUTH_SCHEME = "Bearer" as const;
+
+/**
+ * Configuration URLs carry the deployment-scoped bearer token on every
+ * callback. Parse rather than prefix-match so URL user-info cannot disguise a
+ * non-loopback HTTP host (for example `127.0.0.1@evil.example`). HTTPS is
+ * allowed for deployment-private hosts; cleartext is local-development only.
+ */
+export const isInternalServiceUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password) return false;
+    return (
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && parsed.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * RFC 8785-compatible JSON normalization used for request and result
+ * fingerprints. It makes semantically identical JSON object orderings replay
+ * identically while preserving array order and rejecting invalid JSON values.
+ */
+export const canonicalize = (value: unknown): string => {
+  const normalize = (input: unknown): unknown => {
+    if (input === null || typeof input === "string" || typeof input === "boolean") {
+      return input;
+    }
+    if (typeof input === "number") {
+      if (!Number.isFinite(input)) throw new TypeError("JCS cannot encode non-finite numbers");
+      return input;
+    }
+    if (Array.isArray(input)) return input.map(normalize);
+    if (typeof input === "object") {
+      const record = input as Record<string, unknown>;
+      const result: Record<string, unknown> = {};
+      for (const key of Object.keys(record).sort()) result[key] = normalize(record[key]);
+      return result;
+    }
+    throw new TypeError(`JCS cannot encode ${typeof input}`);
+  };
+
+  return JSON.stringify(normalize(value));
+};
+
 export const INTERNAL_RUNNER_ROUTES = {
   dispatch: { method: "POST", path: "/internal/v1/runs" },
   heartbeat: { method: "POST", path: "/internal/v1/runs/:id/heartbeat" },
@@ -21,9 +68,8 @@ export const INTERNAL_RUNNER_ROUTES = {
 } as const;
 
 /**
- * These are the reciprocal, runner-to-API callbacks.  They deliberately use
- * the same versioned contract and Bearer authentication as API-to-runner
- * requests, but are served by the API host rather than the runner host.
+ * Reciprocal runner-to-API callbacks. They use the same versioned contract
+ * and bearer token as API-to-runner calls, but are served by the API host.
  */
 export const INTERNAL_API_CALLBACK_ROUTES = {
   heartbeat: { method: "POST", path: "/internal/v1/runs/:id/heartbeat" },

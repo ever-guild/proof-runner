@@ -1,12 +1,13 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { promisify } from "node:util";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { promisify } from "node:util";
 import {
   CONTRACT_VERSION,
   InternalCancellationRequestSchema,
   InternalDispatchRequestSchema,
   InternalHeartbeatRequestSchema,
   InternalResultDeliveryRequestSchema,
+  isInternalServiceUrl,
 } from "@ever-guild/proof-runner-schema";
 import type { RunnerConfig } from "./config.js";
 import { loadRunnerConfig } from "./config.js";
@@ -96,7 +97,9 @@ const execFile = promisify(execFileCallback);
 export const createRunnerReadiness = (config: RunnerConfig): RunnerReadiness => ({
   async isReady(): Promise<boolean> {
     try {
-      await execFile("docker", ["image", "inspect", config.runtimeImage], { timeout: 3_000 });
+      await execFile("docker", ["image", "inspect", config.runtimeImage], {
+        timeout: 3_000,
+      });
       const callbackUrl = new URL("/health/ready", config.apiCallbackUrl!);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3_000);
@@ -113,10 +116,13 @@ export const createRunnerReadiness = (config: RunnerConfig): RunnerReadiness => 
 
 export const createRunnerServer = (
   config = loadRunnerConfig(),
-  service = new RunnerService(config),
-  readiness = createRunnerReadiness(config),
+  providedService?: RunnerService,
+  readiness: RunnerReadiness = createRunnerReadiness(config),
 ): RunnerHttpServer => {
-  if (!config.apiCallbackUrl) throw new Error("PROOF_RUNNER_API_URL is required when starting the runner server");
+  if (!config.apiCallbackUrl || !isInternalServiceUrl(config.apiCallbackUrl)) {
+    throw new Error("PROOF_RUNNER_API_URL is required when starting the runner API");
+  }
+  const service = providedService ?? new RunnerService(config);
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://runner.internal");
@@ -126,7 +132,9 @@ export const createRunnerServer = (
       }
       if (request.method === "GET" && url.pathname === "/health/ready") {
         const ready = await readiness.isReady();
-        json(response, ready ? 200 : 503, { status: ready ? "ready" : "not_ready" });
+        json(response, ready ? 200 : 503, {
+          status: ready ? "ready" : "not_ready",
+        });
         return;
       }
       service.authenticate(request.headers.authorization);
@@ -194,7 +202,7 @@ export const createRunnerServer = (
           ? error
           : new TransportError(
               "INTERNAL_ERROR",
-              error instanceof Error ? error.message : "Internal runner error",
+              "The runner could not process this request.",
               500,
               true,
             );

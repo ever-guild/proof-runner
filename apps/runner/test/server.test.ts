@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { CONTRACT_VERSION } from "@ever-guild/proof-runner-schema";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RunnerConfig } from "../src/config.js";
 import type { SandboxExecution } from "../src/sandbox.js";
 import { createRunnerServer, type RunnerHttpServer } from "../src/server.js";
@@ -62,6 +62,18 @@ describe("internal runner HTTP contract", () => {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+
+  it("requires an API callback URL when starting the control plane", () => {
+    const withoutCallback = { ...config };
+    delete withoutCallback.apiCallbackUrl;
+    expect(() => createRunnerServer(withoutCallback)).toThrow(/PROOF_RUNNER_API_URL/);
+    expect(() =>
+      createRunnerServer({
+        ...config,
+        apiCallbackUrl: "http://127.0.0.1:8787@evil.example",
+      }),
+    ).toThrow(/PROOF_RUNNER_API_URL/);
+  });
 
   it("fails closed without bearer auth and rejects version drift", async () => {
     const unauthorized = await request(
@@ -162,5 +174,23 @@ describe("internal runner HTTP contract", () => {
       runId,
       cancellationRequested: true,
     });
+  });
+
+  it("redacts unexpected internal errors from HTTP responses", async () => {
+    vi.spyOn(server.service, "status").mockImplementation(() => {
+      throw new Error("postgres://internal-user:secret@db.internal/proof-runner");
+    });
+
+    const response = await request(`/internal/v1/runs/${randomUUID()}/status`, "GET");
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "The runner could not process this request.",
+        retryable: true,
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("secret@db.internal");
   });
 });

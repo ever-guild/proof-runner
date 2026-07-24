@@ -64,6 +64,24 @@ discriminated by terminal `status`: COMPLETED and TIMEOUT include a normalized
 report, while SYSTEM_ERROR includes stable error details. A timeout report must
 have verdict INCONCLUSIVE.
 
+## Internal runner-to-API callbacks
+
+The runner sends the following requests to the API host, using the same
+deployment-scoped bearer token and contract version. Their path overlaps the
+runner endpoints above, but the receiving host is the API, not the runner.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/internal/v1/runs/:id/heartbeat` | Renew the API-owned lease and publish the active stage |
+| PUT | `/internal/v1/runs/:id/result` | Deliver the final normalized report or stable system error |
+
+The API accepts a callback only for its current active lease. A rejected,
+unreachable, or expired callback cannot leave a run stuck: the API cancels the
+runner when its lease expires and persists `SYSTEM_ERROR` with an
+INCONCLUSIVE verdict. The API persists a canonical terminal-result fingerprint
+in the same transaction as the terminal state, so an identical result retry is
+accepted after an API restart while a changed result remains a conflict.
+
 Stable transport errors are exported as
 `InternalTransportErrorCodeSchema`. HTTP mapping is: authentication 401/403,
 validation and version mismatch 400, missing run 404, lease/state/conflict
@@ -86,6 +104,8 @@ settlement is outside PR-001.
 ## Persistence boundary
 
 Migration `001_initial.sql` stores run metadata, normalized checks, and signed
-receipts in durable tables. Raw logs are held in their own expiry-indexed table
-and may be deleted after the configured TTL without deleting normalized checks
-or receipts.
+receipts in durable tables. `002_run_orchestration.sql` adds terminal report
+and normalized system-error fields; `003_result_delivery_fingerprint.sql`
+makes result delivery idempotent across API restarts. Raw logs are held in
+their own expiry-indexed table and may be deleted after the configured TTL
+without deleting normalized checks or receipts.

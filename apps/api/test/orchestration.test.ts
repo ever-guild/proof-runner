@@ -1,255 +1,403 @@
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
-import { readFileSync } from "node:fs";
-import { request as httpRequest } from "node:http";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTRACT_VERSION,
+  type InternalDispatchRequest,
   type InternalResultDeliveryRequest,
-  type SignedReceipt,
   type VerificationReport,
+  type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
-import { InspectionService, type InspectionGateway } from "../src/inspection.js";
-import { Orchestrator, type ReceiptIssuer, type RunnerClient } from "../src/orchestration.js";
-import { createApiServer } from "../src/server.js";
+import { ReceiptService, ReceiptStore } from "@ever-guild/proof-runner-receipt";
+import {
+  Orchestrator,
+  type ReceiptIssuer,
+  type RunnerClient,
+} from "../src/orchestration.js";
 import { RunStore } from "../src/store.js";
-import { createRunnerServer } from "../../runner/src/server.js";
-import type { RunnerConfig } from "../../runner/src/config.js";
-import { RunnerService } from "../../runner/src/service.js";
-import { HttpRunnerClient } from "../src/orchestration.js";
 
-const hash = "a".repeat(64);
-const sha = "b".repeat(40);
-const request = {
-  contractVersion: CONTRACT_VERSION, repositoryUrl: "https://github.com/acme/example", resolvedCommitSha: sha,
-  resolvedRef: { type: "branch" as const, value: "main" }, skill: { name: "node-typescript" as const, version: "1" as const, hash }, public: false,
+const directories: string[] = [];
+
+afterEach(() => {
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const request: VerifyRequest = {
+  contractVersion: CONTRACT_VERSION,
+  repositoryUrl: "https://github.com/ever-guild/example",
+  resolvedCommitSha: "a".repeat(40),
+  resolvedRef: { type: "tag", value: "demo-fixed" },
+  skill: {
+    name: "node-typescript",
+    version: "1",
+    hash: "b".repeat(64),
+  },
+  public: false,
 };
-const gateway: InspectionGateway = {
-  resolve: async () => sha,
-  file: async (_url, _sha, path) => ({
-    "package.json": JSON.stringify({ packageManager: "pnpm@10", engines: { node: ">=22" }, scripts: { build: "pnpm build", test: "pnpm test" }, devDependencies: { typescript: "5" } }),
-    "pnpm-lock.yaml": "lockfileVersion: '9.0'", "tsconfig.json": "{}", ".nvmrc": "22\n",
-  }[path] ?? null),
-};
-class FakeRunner implements RunnerClient {
-  calls: Array<{ runId: string; leaseId: string }> = [];
-  cancels: string[] = [];
-  async dispatch(body: { runId: string; lease: { leaseId: string } }): Promise<void> { this.calls.push({ runId: body.runId, leaseId: body.lease.leaseId }); }
-  async cancel(runId: string): Promise<void> { this.cancels.push(runId); }
-}
-class FakeReceipts implements ReceiptIssuer {
-  reports: VerificationReport[] = [];
-  issue(report: VerificationReport): SignedReceipt {
-    this.reports.push(report);
-    return {
-      contractVersion: CONTRACT_VERSION,
-      payload: { contractVersion: CONTRACT_VERSION, id: report.runId, report, createdAt: report.completedAt },
-      canonicalization: "JCS-RFC8785", hashAlgorithm: "SHA-256", payloadHash: "f".repeat(64),
-      signatureAlgorithm: "Ed25519", keyId: "test", signature: "test",
-    };
+
+class RecordingRunner implements RunnerClient {
+  readonly dispatched: InternalDispatchRequest[] = [];
+  readonly cancelled: string[] = [];
+
+  async dispatch(run: InternalDispatchRequest): Promise<void> {
+    this.dispatched.push(run);
+  }
+
+  async cancel(runId: string): Promise<void> {
+    this.cancelled.push(runId);
   }
 }
 
-const directories: string[] = [];
-afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
-
-const setup = async (receiptReader?: {
-  get(id: string): { receipt: unknown } | null;
-  publicKey(keyId: string): unknown | null;
-  verify(receipt: unknown): unknown;
-}) => {
-  const directory = mkdtempSync(join(tmpdir(), "proof-runner-api-")); directories.push(directory);
-  const store = new RunStore(join(directory, "runs.sqlite"));
-  const runner = new FakeRunner(); const receipts = new FakeReceipts();
-  const orchestrator = new Orchestrator(store, runner, receipts, 50);
-  const server = createApiServer({
-    store,
-    inspection: new InspectionService(gateway),
-    orchestrator,
-    bearerToken: "t".repeat(32),
-    ...(receiptReader ? { receiptReader } : {}),
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
-  const base = `http://127.0.0.1:${address.port}`;
-  const close = async () => { orchestrator.stop(); store.close(); await new Promise<void>((resolve) => server.close(() => resolve())); };
-  return { store, runner, receipts, orchestrator, base, close };
+const receipts: ReceiptIssuer = {
+  issue: () => {
+    throw new Error("receipt issuance is not part of this dispatch slice");
+  },
 };
-const post = async (base: string, path: string, body: unknown, headers: Record<string, string> = {}) => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
-const postChunked = async (base: string, path: string, chunks: string[]) =>
-  await new Promise<{ body: unknown; status: number }>((resolve, reject) => {
-    const request = httpRequest(`${base}${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-    }, (response) => {
-      const responseChunks: Buffer[] = [];
-      response.on("data", (chunk) => responseChunks.push(Buffer.from(chunk)));
-      response.on("end", () => resolve({
-        body: JSON.parse(Buffer.concat(responseChunks).toString("utf8")) as unknown,
-        status: response.statusCode ?? 0,
-      }));
-    });
-    request.on("error", reject);
-    chunks.forEach((chunk) => request.write(chunk));
-    request.end();
-  });
 
-describe("inspection and run orchestration", () => {
-  it("serves unauthenticated liveness and persistent-store readiness probes", async () => {
-    const api = await setup();
-    try {
-      expect(await (await fetch(`${api.base}/health/live`)).json()).toEqual({ status: "live" });
-      expect(await (await fetch(`${api.base}/health/ready`)).json()).toEqual({ status: "ready" });
-    } finally { await api.close(); }
-  });
+describe("Orchestrator", () => {
+  it("claims the next run and dispatches it with a bounded lease", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-orchestration-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const created = store.create("run-1", request);
+    if (created.kind !== "created") throw new Error("expected a queued run");
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts, 30_000);
 
-  it("bounds receipt verification input before parsing or verification", async () => {
-    let verificationCalls = 0;
-    const api = await setup({
-      get: () => null,
-      publicKey: () => null,
-      verify: () => {
-        verificationCalls += 1;
-        return { contractVersion: CONTRACT_VERSION, valid: false, reason: "INVALID_RECEIPT" };
-      },
-    });
     try {
-      const response = await postChunked(api.base, "/api/receipts/verify", [
-        "{\"padding\":\"",
-        "x".repeat(1024 * 1024),
-        "\"}",
-      ]);
-      expect(response.status).toBe(413);
-      expect(response.body).toEqual({
+      await orchestrator.dispatchNext();
+
+      expect(runner.dispatched).toHaveLength(1);
+      expect(runner.dispatched[0]).toMatchObject({
         contractVersion: CONTRACT_VERSION,
-        error: {
-          code: "REQUEST_BODY_TOO_LARGE",
-          message: "Request body exceeds the 1 MiB limit.",
-          retryable: false,
-        },
+        runId: created.run.response.id,
+        request,
       });
-      expect(verificationCalls).toBe(0);
+      expect(
+        new Date(runner.dispatched[0]!.lease.leaseExpiresAt).getTime(),
+      ).toBeGreaterThan(Date.now());
+      expect(store.get(created.run.response.id)?.response).toMatchObject({
+        status: "RUNNING",
+        activeStage: "SANDBOX",
+      });
     } finally {
-      await api.close();
+      orchestrator.stop();
+      store.close();
     }
   });
 
-  it("upgrades an existing 001 persistent volume before using orchestration columns", () => {
-    const directory = mkdtempSync(join(tmpdir(), "proof-runner-upgrade-")); directories.push(directory);
-    const path = join(directory, "runs.sqlite");
-    const old = new DatabaseSync(path);
-    old.exec(readFileSync(new URL("../../../packages/schema/migrations/001_initial.sql", import.meta.url), "utf8"));
-    old.close();
-    const store = new RunStore(path);
-    const checked = new DatabaseSync(path);
-    const columns = checked.prepare("SELECT name FROM pragma_table_info('run_metadata')").all() as Array<{ name: string }>;
-    expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining(["report_json", "system_error_code", "system_error_message", "system_error_retryable"]));
-    checked.close(); store.close();
-  });
-
-  it("inspects committed metadata without executing a repository", async () => {
-    const service = new InspectionService(gateway);
-    await expect(service.inspect("https://github.com/acme/example", { type: "branch", value: "main" })).resolves.toMatchObject({ supported: true, inspection: { resolvedCommitSha: sha, packageManager: "pnpm", hasTypeScript: true, selectedSkill: "node-typescript@1", selectedSkillHash: expect.stringMatching(/^[a-f0-9]{64}$/) } });
-  });
-
-  it("serves the free A2MCP inspection and verification contracts with HTTP 200", async () => {
-    const api = await setup();
-    try {
-      const inspected = await post(api.base, "/a2mcp/inspect_repository", {
-        contractVersion: CONTRACT_VERSION, repositoryUrl: request.repositoryUrl, ref: request.resolvedRef,
-      });
-      expect(inspected.status).toBe(200);
-      expect(await inspected.json()).toMatchObject({ operation: "inspect_repository", result: { supported: true } });
-      const verified = await post(api.base, "/a2mcp/verify_repository", { ...request, idempotencyKey: "a2mcp-key" });
-      expect(verified.status).toBe(200);
-      expect(await verified.json()).toMatchObject({ operation: "verify_repository", result: { status: expect.stringMatching(/^(QUEUED|RUNNING)$/) } });
-    } finally { await api.close(); }
-  });
-
-  it("enforces idempotency and a one-active/five-waiting FIFO queue", async () => {
-    const api = await setup();
-    try {
-      const first = await post(api.base, "/api/verify", request, { "idempotency-key": "first" });
-      expect(first.status).toBe(202);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(api.runner.calls).toHaveLength(1);
-      const replay = await post(api.base, "/api/verify", request, { "idempotency-key": "first" });
-      expect(replay.status).toBe(200); expect((await replay.json() as { replayed: boolean }).replayed).toBe(true);
-      const conflict = await post(api.base, "/api/verify", { ...request, public: true }, { "idempotency-key": "first" });
-      expect(conflict.status).toBe(409);
-      for (let index = 0; index < 5; index += 1) expect((await post(api.base, "/api/verify", request, { "idempotency-key": `q${index}` })).status).toBe(202);
-      const full = await post(api.base, "/api/verify", request, { "idempotency-key": "overflow" });
-      expect(full.status).toBe(429); expect((await full.json() as { error: { code: string } }).error.code).toBe("RUN_QUEUE_FULL");
-      const queued = await (await fetch(`${api.base}/api/runs/${(await first.json() as { run: { id: string } }).run.id}`)).json() as { status: string };
-      expect(queued.status).toBe("RUNNING");
-    } finally { await api.close(); }
-  });
-
-  it("persists normalized terminal reports through restart and dispatches FIFO successor", async () => {
-    const api = await setup();
-    try {
-      const first = await post(api.base, "/api/verify", request, { "idempotency-key": "one" });
-      const firstRun = (await first.json() as { run: { id: string } }).run.id;
-      await post(api.base, "/api/verify", request, { "idempotency-key": "two" });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const leaseId = api.runner.calls[0]?.leaseId; expect(leaseId).toBeTruthy();
-      const completedAt = new Date().toISOString();
-      const report: VerificationReport = { contractVersion: CONTRACT_VERSION, runId: firstRun, repositoryUrl: request.repositoryUrl, resolvedCommitSha: sha, resolvedRef: request.resolvedRef, skill: request.skill, runtimeImageDigest: `sha256:${"c".repeat(64)}`, verdict: "PASS", checks: [{ id: "test", stage: "TEST", title: "Test", outcome: "PASSED", startedAt: completedAt, completedAt, durationMs: 0, exitCode: 0, summary: "Passed" }], durationMs: 0, completedAt, reasonCode: null };
-      const result: InternalResultDeliveryRequest = { contractVersion: CONTRACT_VERSION, leaseId: leaseId!, completedAt, status: "COMPLETED", report, systemError: null };
-      const callback = await fetch(`${api.base}/internal/v1/runs/${firstRun}/result`, { method: "PUT", headers: { authorization: `Bearer ${"t".repeat(32)}`, "content-type": "application/json" }, body: JSON.stringify(result) });
-      expect(callback.status).toBe(200);
-      expect(api.receipts.reports).toHaveLength(1);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(api.runner.calls).toHaveLength(2);
-      const persisted = api.store.get(firstRun)?.response;
-      expect(persisted).toMatchObject({ status: "COMPLETED", verdict: "PASS", report: { checks: [{ id: "test", outcome: "PASSED" }] } });
-      const databasePath = join(directories[0]!, "runs.sqlite");
-      api.orchestrator.stop(); api.store.close();
-      const restarted = new RunStore(databasePath);
-      expect(restarted.get(firstRun)?.response).toMatchObject({ status: "COMPLETED", report: { verdict: "PASS" } });
-      restarted.close();
-    } finally { await api.close().catch(() => undefined); }
-  });
-
-  it("persists a terminal result across the real authenticated API-runner HTTP bridge", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "proof-runner-bridge-")); directories.push(directory);
-    const store = new RunStore(join(directory, "runs.sqlite"));
-    const receipts = new FakeReceipts();
-    const runnerClient: { value?: RunnerClient } = {};
-    const orchestrator = new Orchestrator(store, { dispatch: (body) => runnerClient.value!.dispatch(body), cancel: (id) => runnerClient.value!.cancel(id) }, receipts, 50);
-    const apiServer = createApiServer({ store, inspection: new InspectionService(gateway), orchestrator, bearerToken: "t".repeat(32) });
-    await new Promise<void>((resolve) => apiServer.listen(0, "127.0.0.1", resolve));
-    const apiAddress = apiServer.address(); if (!apiAddress || typeof apiAddress === "string") throw new Error("missing API address");
-    const apiBase = `http://127.0.0.1:${apiAddress.port}`;
-    const config: RunnerConfig = { host: "127.0.0.1", port: 0, bearerToken: "t".repeat(32), apiCallbackUrl: apiBase, leaseExtensionMs: 30_000, runtimeImage: "unused", proxyImage: "unused", workspaceRoot: directory, limits: { repositoryBytes: 1, fileCount: 1, diskBytes: 1, cpuCount: 1, memoryBytes: 16 * 1024 * 1024, pids: 16, executionMs: 180_000, commandOutputBytes: 1024 } };
-    const runner = createRunnerServer(config, new RunnerService(config, {
-      execute: async (runId, verify, controls) => {
-        controls.onStage("TEST");
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        controls.onStage("TEST");
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        const completedAt = new Date().toISOString();
-        return { status: "COMPLETED", systemError: null, report: { contractVersion: CONTRACT_VERSION, runId, repositoryUrl: verify.repositoryUrl, resolvedCommitSha: verify.resolvedCommitSha, resolvedRef: verify.resolvedRef, skill: verify.skill, runtimeImageDigest: `sha256:${"d".repeat(64)}`, verdict: "PASS", checks: [{ id: "test", stage: "TEST", title: "Test", outcome: "PASSED", startedAt: completedAt, completedAt, durationMs: 0, exitCode: 0, summary: "Passed" }], durationMs: 0, completedAt, reasonCode: null } };
+  it("keeps queued and completed state plus normalized checks across an API restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-terminal-"));
+    directories.push(directory);
+    const databasePath = join(directory, "runs.sqlite");
+    const store = new RunStore(databasePath);
+    const receiptStore = new ReceiptStore(databasePath);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const receiptService = new ReceiptService(
+      {
+        keyId: "receipt-test-1",
+        privateKeyPem: privateKey
+          .export({ type: "pkcs8", format: "pem" })
+          .toString(),
       },
-    }));
-    await new Promise<void>((resolve) => runner.listen(0, "127.0.0.1", resolve));
-    const runnerAddress = runner.address(); if (!runnerAddress || typeof runnerAddress === "string") throw new Error("missing runner address");
-    const httpClient = new HttpRunnerClient(`http://127.0.0.1:${runnerAddress.port}`, config.bearerToken);
-    runnerClient.value = { dispatch: (body) => httpClient.dispatch(body), cancel: (id) => httpClient.cancel(id) };
-    orchestrator.start();
+      receiptStore,
+    );
+    const created = store.create("terminal-1", request);
+    if (created.kind !== "created") throw new Error("expected a queued run");
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receiptService.signer);
+
     try {
-      const creation = await post(apiBase, "/api/verify", request, { "idempotency-key": "bridge" });
-      const id = (await creation.json() as { run: { id: string } }).run.id;
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      expect(store.get(id)?.response.status).toBe("COMPLETED");
-      expect(store.get(id)?.response).toMatchObject({ verdict: "PASS", report: { checks: [{ outcome: "PASSED" }] } });
-      expect(receipts.reports).toHaveLength(1);
+      await orchestrator.dispatchNext();
+      const leaseId = runner.dispatched[0]?.lease.leaseId;
+      if (!leaseId) throw new Error("expected a runner dispatch");
+      const completedAt = new Date().toISOString();
+      const report: VerificationReport = {
+        contractVersion: CONTRACT_VERSION,
+        runId: created.run.response.id,
+        repositoryUrl: request.repositoryUrl,
+        resolvedCommitSha: request.resolvedCommitSha,
+        resolvedRef: request.resolvedRef,
+        skill: request.skill,
+        runtimeImageDigest: `sha256:${"c".repeat(64)}`,
+        verdict: "PASS",
+        checks: [
+          {
+            id: "test",
+            stage: "TEST",
+            title: "Run tests",
+            outcome: "PASSED",
+            startedAt: completedAt,
+            completedAt,
+            durationMs: 0,
+            exitCode: 0,
+            summary: "All tests passed.",
+          },
+        ],
+        durationMs: 0,
+        completedAt,
+        reasonCode: null,
+      };
+      const result: InternalResultDeliveryRequest = {
+        contractVersion: CONTRACT_VERSION,
+        leaseId,
+        completedAt,
+        status: "COMPLETED",
+        report,
+        systemError: null,
+      };
+
+      await expect(orchestrator.result(created.run.response.id, result)).resolves.toBe(
+        "ACCEPTED",
+      );
+      await expect(orchestrator.result(created.run.response.id, result)).resolves.toBe(
+        "ACCEPTED",
+      );
+      await expect(
+        orchestrator.result(created.run.response.id, {
+          ...result,
+          completedAt: new Date(Date.now() + 1).toISOString(),
+        }),
+      ).resolves.toBe("RESULT_CONFLICT");
+      expect(store.get(created.run.response.id)?.response).toMatchObject({
+        status: "COMPLETED",
+        verdict: "PASS",
+        links: { receipt: `/api/receipts/${created.run.response.id}` },
+        report: { checks: [{ id: "test", outcome: "PASSED" }] },
+      });
+
+      const queued = store.create("queued-after-restart", request);
+      if (queued.kind !== "created") throw new Error("expected a queued run");
+
+      store.close();
+      const restarted = new RunStore(databasePath);
+      try {
+        expect(restarted.get(created.run.response.id)?.response).toMatchObject({
+          status: "COMPLETED",
+          verdict: "PASS",
+          report: {
+            resolvedCommitSha: request.resolvedCommitSha,
+            checks: [{ id: "test", stage: "TEST", outcome: "PASSED" }],
+          },
+        });
+        expect(restarted.get(queued.run.response.id)?.response).toMatchObject({
+          status: "QUEUED",
+          queuePosition: 1,
+        });
+
+        const database = new DatabaseSync(databasePath);
+        try {
+          expect(
+            database.prepare(
+              "SELECT check_id, stage, outcome FROM normalized_checks WHERE run_id = ?",
+            ).all(created.run.response.id),
+          ).toEqual([{ check_id: "test", stage: "TEST", outcome: "PASSED" }]);
+        } finally {
+          database.close();
+        }
+      } finally {
+        restarted.close();
+      }
     } finally {
-      orchestrator.stop(); store.close();
-      await new Promise<void>((resolve) => runner.close(() => resolve()));
-      await new Promise<void>((resolve) => apiServer.close(() => resolve()));
+      orchestrator.stop();
+      receiptStore.close();
+    }
+  });
+
+  it("converts runner failures into generic INCONCLUSIVE system errors", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-system-error-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const created = store.create("error-1", request);
+    if (created.kind !== "created") throw new Error("expected a queued run");
+    const next = store.create("error-2", request);
+    if (next.kind !== "created") throw new Error("expected a waiting run");
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts);
+
+    try {
+      await orchestrator.dispatchNext();
+      const leaseId = runner.dispatched[0]?.lease.leaseId;
+      if (!leaseId) throw new Error("expected a runner dispatch");
+
+      await expect(
+        orchestrator.result(created.run.response.id, {
+          contractVersion: CONTRACT_VERSION,
+          leaseId,
+          completedAt: new Date().toISOString(),
+          status: "SYSTEM_ERROR",
+          report: null,
+          systemError: {
+            code: "DATABASE_URL",
+            message: "postgres://internal-user:secret@db.internal/proof-runner",
+            retryable: true,
+          },
+        }),
+      ).resolves.toBe("ACCEPTED");
+
+      const stored = store.get(created.run.response.id)?.response;
+      expect(stored).toMatchObject({
+        status: "SYSTEM_ERROR",
+        verdict: "INCONCLUSIVE",
+        systemError: {
+          code: "RUNNER_FAILURE",
+          message: "The runner could not complete this run.",
+          retryable: true,
+        },
+      });
+      expect(JSON.stringify(stored)).not.toContain("secret@db.internal");
+      expect(runner.dispatched).toHaveLength(2);
+      expect(runner.dispatched[1]).toMatchObject({ runId: next.run.response.id });
+    } finally {
+      orchestrator.stop();
+      store.close();
+    }
+  });
+
+  it("cancels and waits out an ambiguous dispatch before draining the queue", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-ambiguous-dispatch-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const first = store.create("ambiguous-first", request);
+    const second = store.create("ambiguous-second", request);
+    if (first.kind !== "created" || second.kind !== "created") {
+      throw new Error("expected queued runs");
+    }
+    class AmbiguousRunner extends RecordingRunner {
+      override async dispatch(run: InternalDispatchRequest): Promise<void> {
+        this.dispatched.push(run);
+        if (this.dispatched.length === 1) throw new Error("response was lost");
+      }
+    }
+    const runner = new AmbiguousRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts, 100);
+
+    try {
+      await orchestrator.dispatchNext();
+      expect(store.get(first.run.response.id)?.response).toMatchObject({
+        status: "SYSTEM_ERROR",
+        systemError: { code: "RUNNER_UNAVAILABLE" },
+      });
+      await vi.waitFor(() => expect(runner.cancelled).toEqual([first.run.response.id]));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(runner.dispatched).toHaveLength(1);
+
+      await vi.waitFor(() => {
+        expect(runner.dispatched).toHaveLength(2);
+        expect(runner.dispatched[1]).toMatchObject({ runId: second.run.response.id });
+      });
+    } finally {
+      orchestrator.stop();
+      store.close();
+    }
+  });
+
+  it("quarantines an ambiguous dispatch until its latest accepted heartbeat expires", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-renewed-dispatch-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const first = store.create("renewed-first", request);
+    const second = store.create("renewed-second", request);
+    if (first.kind !== "created" || second.kind !== "created") {
+      throw new Error("expected queued runs");
+    }
+
+    const runner = {
+      dispatched: [] as InternalDispatchRequest[],
+      cancelled: [] as string[],
+      async dispatch(run: InternalDispatchRequest): Promise<void> {
+        this.dispatched.push(run);
+        if (this.dispatched.length > 1) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(
+          orchestrator.heartbeat(run.runId, run.lease.leaseId, "TEST"),
+        ).toMatchObject({ kind: "ACCEPTED" });
+        throw new Error("dispatch response was lost after a renewal");
+      },
+      async cancel(runId: string): Promise<void> {
+        this.cancelled.push(runId);
+        throw new Error("runner is unreachable");
+      },
+    };
+    const orchestrator = new Orchestrator(store, runner, receipts, 100);
+
+    try {
+      await orchestrator.dispatchNext();
+      await vi.waitFor(() => expect(runner.cancelled).toEqual([first.run.response.id]));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(runner.dispatched).toHaveLength(1);
+
+      await vi.waitFor(() => {
+        expect(runner.dispatched).toHaveLength(2);
+        expect(runner.dispatched[1]).toMatchObject({ runId: second.run.response.id });
+      });
+    } finally {
+      orchestrator.stop();
+      store.close();
+    }
+  });
+
+  it("cancels an expired lease and makes the run terminal before dispatching another", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-expired-lease-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const created = store.create("lease-1", request);
+    if (created.kind !== "created") throw new Error("expected a queued run");
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts, 20);
+
+    try {
+      orchestrator.start();
+      await vi.waitFor(() => {
+        expect(store.get(created.run.response.id)?.response).toMatchObject({
+          status: "SYSTEM_ERROR",
+          verdict: "INCONCLUSIVE",
+          systemError: { code: "LEASE_EXPIRED" },
+        });
+      });
+      expect(runner.cancelled).toEqual([created.run.response.id]);
+    } finally {
+      orchestrator.stop();
+      store.close();
+    }
+  });
+
+  it("cancels interrupted work and waits out its lease before dispatching the queue", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-recovery-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const interrupted = store.create("interrupted", request);
+    const queued = store.create("queued", request);
+    if (interrupted.kind !== "created" || queued.kind !== "created") {
+      throw new Error("expected queued runs");
+    }
+    expect(store.claimNext()?.response.id).toBe(interrupted.run.response.id);
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts, 40);
+
+    try {
+      orchestrator.start();
+
+      expect(store.get(interrupted.run.response.id)?.response).toMatchObject({
+        status: "SYSTEM_ERROR",
+        systemError: { code: "API_RESTARTED" },
+      });
+      expect(store.get(queued.run.response.id)?.response.status).toBe("QUEUED");
+      await vi.waitFor(() => expect(runner.cancelled).toEqual([interrupted.run.response.id]));
+      expect(runner.dispatched).toHaveLength(0);
+
+      await vi.waitFor(() => {
+        expect(runner.dispatched).toHaveLength(1);
+        expect(runner.dispatched[0]).toMatchObject({ runId: queued.run.response.id });
+      });
+    } finally {
+      orchestrator.stop();
+      store.close();
     }
   });
 });

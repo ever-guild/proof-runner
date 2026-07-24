@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { VerifyRequest } from "@ever-guild/proof-runner-schema";
 import { CONTRACT_VERSION } from "@ever-guild/proof-runner-schema";
 import { describe, expect, it, vi } from "vitest";
+import { ApiCallbackError } from "../src/api-client.js";
 import type { RunnerConfig } from "../src/config.js";
 import type { SandboxExecution } from "../src/sandbox.js";
 import { RunnerService } from "../src/service.js";
@@ -10,7 +11,6 @@ const config: RunnerConfig = {
   host: "127.0.0.1",
   port: 8788,
   bearerToken: "a".repeat(32),
-  apiCallbackUrl: null,
   leaseExtensionMs: 30_000,
   runtimeImage: "unused",
   proxyImage: "unused",
@@ -161,15 +161,219 @@ describe("versioned leased runner service", () => {
     await vi.waitFor(() => expect(() => service.dispatch(dispatch())).not.toThrow());
   });
 
-  it("returns terminal results to the authenticated API callback client", async () => {
-    const callback = { heartbeat: vi.fn(async () => new Date(Date.now() + 60_000).toISOString()), result: vi.fn(async () => undefined) };
-    const service = new RunnerService(config, { execute: async () => ({
-      status: "SYSTEM_ERROR", report: null,
-      systemError: { code: "RUNNER_FAILURE", message: "internal detail", retryable: true },
-    }) }, callback);
-    const job = dispatch();
-    service.dispatch(job);
-    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledOnce());
-    expect(callback.result).toHaveBeenCalledWith(job.runId, expect.objectContaining({ status: "SYSTEM_ERROR", leaseId: job.lease.leaseId }));
+  it("redacts unexpected sandbox failures before they leave the runner", async () => {
+    const service = new RunnerService(config, {
+      execute: async () => {
+        throw new Error("postgres://internal-user:secret@db.internal/proof-runner");
+      },
+    });
+    const run = dispatch();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(service.result(run.runId)).not.toBeNull());
+    const result = service.result(run.runId);
+    expect(result).toMatchObject({
+      status: "SYSTEM_ERROR",
+      systemError: {
+        code: "RUNNER_FAILURE",
+        message: "The runner could not complete this verification.",
+        retryable: true,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("secret@db.internal");
+  });
+
+  it("renews using the dispatched API lease even when runner extension is longer", async () => {
+    let finish: ((value: SandboxExecution) => void) | undefined;
+    const execution = new Promise<SandboxExecution>((resolve) => {
+      finish = resolve;
+    });
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => undefined),
+    };
+    const service = new RunnerService(
+      { ...config, leaseExtensionMs: 10_000 },
+      { execute: () => execution },
+      callback,
+    );
+    const run = dispatch();
+    run.lease.leaseExpiresAt = new Date(Date.now() + 100).toISOString();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.heartbeat).toHaveBeenCalledTimes(1));
+    finish?.({
+      status: "SYSTEM_ERROR",
+      report: null,
+      systemError: {
+        code: "RUNNER_FAILURE",
+        message: "Sandbox cleanup completed.",
+        retryable: true,
+      },
+    });
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+  });
+
+  it("reports stage progress and the terminal result to the API callback", async () => {
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => undefined),
+    };
+    const service = new RunnerService(
+      config,
+      {
+        execute: async (runId, verify, hooks) => {
+          hooks.onStage("TEST");
+          const completedAt = new Date().toISOString();
+          return {
+            status: "COMPLETED",
+            report: {
+              contractVersion: CONTRACT_VERSION,
+              runId,
+              repositoryUrl: verify.repositoryUrl,
+              resolvedCommitSha: verify.resolvedCommitSha,
+              resolvedRef: verify.resolvedRef,
+              skill: verify.skill,
+              runtimeImageDigest: `sha256:${"c".repeat(64)}`,
+              verdict: "PASS",
+              checks: [
+                {
+                  id: "test",
+                  stage: "TEST",
+                  title: "Run tests",
+                  outcome: "PASSED",
+                  startedAt: completedAt,
+                  completedAt,
+                  durationMs: 0,
+                  exitCode: 0,
+                  summary: "All tests passed.",
+                },
+              ],
+              durationMs: 0,
+              completedAt,
+              reasonCode: null,
+            },
+            systemError: null,
+          };
+        },
+      },
+      callback,
+    );
+    const run = dispatch();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+    expect(callback.heartbeat).toHaveBeenCalledWith(
+      run.runId,
+      run.lease.leaseId,
+      "TEST",
+    );
+    expect(callback.result).toHaveBeenCalledWith(
+      run.runId,
+      expect.objectContaining({
+        leaseId: run.lease.leaseId,
+        status: "COMPLETED",
+        report: expect.objectContaining({ verdict: "PASS" }),
+      }),
+    );
+  });
+
+  it("does not retry a terminal callback rejected by the API", async () => {
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => {
+        throw new ApiCallbackError(409, "LEASE_EXPIRED");
+      }),
+    };
+    const service = new RunnerService(
+      config,
+      {
+        execute: async () => ({
+          status: "SYSTEM_ERROR",
+          report: null,
+          systemError: {
+            code: "RUNNER_FAILURE",
+            message: "The runner could not complete this verification.",
+            retryable: true,
+          },
+        }),
+      },
+      callback,
+    );
+    const run = dispatch();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    expect(callback.result).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a late heartbeat lease extension while retrying a terminal callback", async () => {
+    let extendLease: (() => void) | undefined;
+    let attempts = 0;
+    const callback = {
+      heartbeat: vi.fn(
+        () => new Promise<{ leaseExpiresAt: string; cancellationRequested: boolean }>(
+          (resolve) => {
+            extendLease = () => resolve({
+              leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+              cancellationRequested: false,
+            });
+          },
+        ),
+      ),
+      result: vi.fn(async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          setTimeout(() => extendLease?.(), 10);
+          throw new ApiCallbackError(503, "INTERNAL_ERROR");
+        }
+      }),
+    };
+    const service = new RunnerService(
+      config,
+      {
+        execute: async (_runId, _verify, hooks) => {
+          hooks.onStage("TEST");
+          return {
+            status: "SYSTEM_ERROR",
+            report: null,
+            systemError: {
+              code: "RUNNER_FAILURE",
+              message: "The runner could not complete this verification.",
+              retryable: true,
+            },
+          };
+        },
+      },
+      callback,
+    );
+    const run = dispatch();
+    // Keep this below the 100 ms retry delay: the old fixed-deadline loop
+    // stopped after its first failure, while the renewed lease must permit a
+    // second attempt.
+    run.lease.leaseExpiresAt = new Date(Date.now() + 90).toISOString();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.heartbeat).toHaveBeenCalled());
+    await vi.waitFor(() => {
+      expect(new Date(service.status(run.runId).lease.leaseExpiresAt).getTime())
+        .toBeGreaterThan(Date.now() + 1_000);
+    });
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(2));
   });
 });
