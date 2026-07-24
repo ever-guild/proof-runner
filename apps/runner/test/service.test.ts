@@ -10,7 +10,6 @@ const config: RunnerConfig = {
   host: "127.0.0.1",
   port: 8788,
   bearerToken: "a".repeat(32),
-  apiCallbackUrl: null,
   leaseExtensionMs: 30_000,
   runtimeImage: "unused",
   proxyImage: "unused",
@@ -161,15 +160,129 @@ describe("versioned leased runner service", () => {
     await vi.waitFor(() => expect(() => service.dispatch(dispatch())).not.toThrow());
   });
 
-  it("returns terminal results to the authenticated API callback client", async () => {
-    const callback = { heartbeat: vi.fn(async () => new Date(Date.now() + 60_000).toISOString()), result: vi.fn(async () => undefined) };
-    const service = new RunnerService(config, { execute: async () => ({
-      status: "SYSTEM_ERROR", report: null,
-      systemError: { code: "RUNNER_FAILURE", message: "internal detail", retryable: true },
-    }) }, callback);
-    const job = dispatch();
-    service.dispatch(job);
-    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledOnce());
-    expect(callback.result).toHaveBeenCalledWith(job.runId, expect.objectContaining({ status: "SYSTEM_ERROR", leaseId: job.lease.leaseId }));
+  it("redacts unexpected sandbox failures before they leave the runner", async () => {
+    const service = new RunnerService(config, {
+      execute: async () => {
+        throw new Error("postgres://internal-user:secret@db.internal/proof-runner");
+      },
+    });
+    const run = dispatch();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(service.result(run.runId)).not.toBeNull());
+    const result = service.result(run.runId);
+    expect(result).toMatchObject({
+      status: "SYSTEM_ERROR",
+      systemError: {
+        code: "RUNNER_FAILURE",
+        message: "The runner could not complete this verification.",
+        retryable: true,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("secret@db.internal");
+  });
+
+  it("renews using the dispatched API lease even when runner extension is longer", async () => {
+    let finish: ((value: SandboxExecution) => void) | undefined;
+    const execution = new Promise<SandboxExecution>((resolve) => {
+      finish = resolve;
+    });
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => undefined),
+    };
+    const service = new RunnerService(
+      { ...config, leaseExtensionMs: 10_000 },
+      { execute: () => execution },
+      callback,
+    );
+    const run = dispatch();
+    run.lease.leaseExpiresAt = new Date(Date.now() + 100).toISOString();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.heartbeat).toHaveBeenCalledTimes(1));
+    finish?.({
+      status: "SYSTEM_ERROR",
+      report: null,
+      systemError: {
+        code: "RUNNER_FAILURE",
+        message: "Sandbox cleanup completed.",
+        retryable: true,
+      },
+    });
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+  });
+
+  it("reports stage progress and the terminal result to the API callback", async () => {
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => undefined),
+    };
+    const service = new RunnerService(
+      config,
+      {
+        execute: async (runId, verify, hooks) => {
+          hooks.onStage("TEST");
+          const completedAt = new Date().toISOString();
+          return {
+            status: "COMPLETED",
+            report: {
+              contractVersion: CONTRACT_VERSION,
+              runId,
+              repositoryUrl: verify.repositoryUrl,
+              resolvedCommitSha: verify.resolvedCommitSha,
+              resolvedRef: verify.resolvedRef,
+              skill: verify.skill,
+              runtimeImageDigest: `sha256:${"c".repeat(64)}`,
+              verdict: "PASS",
+              checks: [
+                {
+                  id: "test",
+                  stage: "TEST",
+                  title: "Run tests",
+                  outcome: "PASSED",
+                  startedAt: completedAt,
+                  completedAt,
+                  durationMs: 0,
+                  exitCode: 0,
+                  summary: "All tests passed.",
+                },
+              ],
+              durationMs: 0,
+              completedAt,
+              reasonCode: null,
+            },
+            systemError: null,
+          };
+        },
+      },
+      callback,
+    );
+    const run = dispatch();
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+    expect(callback.heartbeat).toHaveBeenCalledWith(
+      run.runId,
+      run.lease.leaseId,
+      "TEST",
+    );
+    expect(callback.result).toHaveBeenCalledWith(
+      run.runId,
+      expect.objectContaining({
+        leaseId: run.lease.leaseId,
+        status: "COMPLETED",
+        report: expect.objectContaining({ verdict: "PASS" }),
+      }),
+    );
   });
 });
