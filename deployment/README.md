@@ -8,6 +8,12 @@ disposable sandbox containers, but is never mounted into a sandbox.
 
 ## Provisioning
 
+This CLI implements Issue #25 production-secret provisioning. It does not close
+PR-011 infrastructure readiness: PR-011 separately records the non-secret
+domain/DNS, dedicated worker, OKX credential-path, Agentic Wallet/receiving
+address, review-email, and A2MCP-timeout evidence with owner, timestamp, and
+blocker status; that evidence remains open until independently reviewed.
+
 Before startup, the deployment owner must confirm the domain/DNS/certificate
 ownership and prepare a host-only `deployment/.env.production`:
 
@@ -51,19 +57,23 @@ pnpm secrets apply \
 ```
 
 `apply` validates file permissions, every value, and the receipt key pair
-before it invokes `gh`. It sends secret values to `gh secret set` over stdin.
+before it invokes `gh`. It lists the requested GitHub Environments without
+mutation; an existing Environment (including its protection rules) is left
+unchanged, and a new one is created only when the exact target name is absent.
+It sends secret values to `gh secret set` over stdin.
 The secret allowlist is `PROOF_RUNNER_BEARER_TOKEN` and
 `PROOF_RUNNER_RECEIPT_PRIVATE_KEY`. Domain, receipt key ID and verification
 keyring, backup policy, and runtime image use `gh variable set`; unknown or
-duplicate dotenv names are rejected. The CLI does not collect the OKX wallet or
-review email, and this deployment currently has no documented OKX credential
-environment schema, so those values must not be added to this file.
+duplicate dotenv names are rejected. Receipt key ID and verification keyring
+are updated before the active receipt private key, so a rotation never exposes
+the new key under stale public metadata.
 
 The previous invocation without a subcommand is no longer accepted. To migrate
 an existing `deployment/.env`, keep it mode `0600`, make sure it contains the
 complete generated schema (including a non-empty verification keyring), and
-run `pnpm secrets apply --env-file deployment/.env --repo owner/repo --environment production`. For new
-deployments, always use `init`. Receipt-key rotation must preserve previous
+run `pnpm secrets apply --input-file deployment/.env --repo owner/repo --environment production`. For new
+deployments, always use `init`; use `--output-file` for a non-default init
+destination. Receipt-key rotation must preserve previous
 public keys in `PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS` and use a new key ID;
 rotation is intentionally separate from bootstrap.
 

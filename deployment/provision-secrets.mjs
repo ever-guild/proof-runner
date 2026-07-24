@@ -19,6 +19,7 @@ import {
 } from "node:fs";
 import { isAbsolute, normalize, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const DEFAULT_ENV_FILE = "deployment/.env.production";
 const SECRET_NAMES = Object.freeze([
@@ -36,8 +37,8 @@ const VARIABLE_NAMES = Object.freeze([
 ]);
 const ALLOWED_NAMES = new Set([...SECRET_NAMES, ...VARIABLE_NAMES]);
 const usage = `Usage:
-  node deployment/provision-secrets.mjs init [--env-file ${DEFAULT_ENV_FILE}] [--public-key-file path] [--key-id id]
-  node deployment/provision-secrets.mjs apply --repo owner/repo [--environment production] [--env-file ${DEFAULT_ENV_FILE}] [--dry-run]`;
+  node deployment/provision-secrets.mjs init [--output-file ${DEFAULT_ENV_FILE}] [--public-key-file path] [--key-id id]
+  node deployment/provision-secrets.mjs apply --repo owner/repo --environment production [--input-file ${DEFAULT_ENV_FILE}] [--dry-run]`;
 
 const fail = (message) => {
   throw new Error(message);
@@ -53,10 +54,16 @@ export const parseArgs = (argv) => {
   if (argv.includes("--help") || argv.includes("-h")) return { help: true };
   const command = argv[0];
   if (command !== "init" && command !== "apply") fail(usage);
-  const options = { command, envFile: DEFAULT_ENV_FILE };
+  const options = { command };
+  if (command === "init") options.outputFile = DEFAULT_ENV_FILE;
+  if (command === "apply") options.inputFile = DEFAULT_ENV_FILE;
   for (let index = 1; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === "--env-file") options.envFile = readOption(argv, index++, argument);
+    if (command === "init" && argument === "--output-file") {
+      options.outputFile = readOption(argv, index++, argument);
+    } else if (command === "apply" && argument === "--input-file") {
+      options.inputFile = readOption(argv, index++, argument);
+    }
     else if (command === "init" && argument === "--public-key-file") {
       options.publicKeyFile = readOption(argv, index++, argument);
     } else if (command === "init" && argument === "--key-id") {
@@ -95,7 +102,7 @@ const defaultFileOps = Object.freeze({
 });
 
 export const initialize = ({
-  envFile = DEFAULT_ENV_FILE,
+  outputFile = DEFAULT_ENV_FILE,
   fileOps = defaultFileOps,
   publicKeyFile,
   keyId = defaultKeyId(),
@@ -103,7 +110,7 @@ export const initialize = ({
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(keyId)) {
     fail("key id must contain only letters, digits, dots, underscores, or hyphens");
   }
-  const envPath = resolve(envFile);
+  const envPath = resolve(outputFile);
   const publicPath = resolve(
     publicKeyFile ?? `${envPath}.receipt-public-key-${keyId}.pem`,
   );
@@ -385,8 +392,8 @@ const validateTarget = (repo, environment) => {
   }
 };
 
-export const loadConfiguration = (envFile) => {
-  const envPath = resolve(envFile);
+export const loadConfiguration = (inputFile) => {
+  const envPath = resolve(inputFile);
   let metadata;
   try {
     metadata = statSync(envPath);
@@ -403,12 +410,12 @@ export const loadConfiguration = (envFile) => {
 export const applyConfiguration = ({
   repo,
   environment,
-  envFile = DEFAULT_ENV_FILE,
+  inputFile = DEFAULT_ENV_FILE,
   dryRun = false,
   runCommand = defaultRunCommand,
 }) => {
   validateTarget(repo, environment);
-  const values = loadConfiguration(envFile);
+  const values = loadConfiguration(inputFile);
   const names = { secrets: [...SECRET_NAMES], variables: [...VARIABLE_NAMES] };
   if (dryRun) return { repo, environment, dryRun: true, applied: [], ...names };
 
@@ -421,13 +428,26 @@ export const applyConfiguration = ({
   if (!commandSucceeded(runCommand("gh", ["repo", "view", repo, "--json", "nameWithOwner"]))) {
     fail(`Repository access preflight failed for ${repo}`);
   }
-  if (!commandSucceeded(runCommand("gh", [
+  const environments = runCommand("gh", [
+    "api",
+    "--paginate",
+    `repos/${repo}/environments`,
+    "--jq",
+    ".environments[].name",
+  ]);
+  if (!commandSucceeded(environments)) {
+    fail(`Failed to list GitHub Environments for ${repo}`);
+  }
+  const environmentExists = (environments.stdout ?? "")
+    .split(/\r?\n/)
+    .some((name) => name === environment);
+  if (!environmentExists && !commandSucceeded(runCommand("gh", [
     "api",
     "--method",
     "PUT",
     `repos/${repo}/environments/${encodeURIComponent(environment)}`,
   ]))) {
-    fail(`Failed to ensure GitHub Environment ${environment} in ${repo}`);
+    fail(`Failed to create GitHub Environment ${environment} in ${repo}`);
   }
 
   const applied = [];
@@ -447,12 +467,26 @@ export const applyConfiguration = ({
     }
     applied.push(name);
   };
-  for (const name of SECRET_NAMES) setValue("secret", name);
-  for (const name of VARIABLE_NAMES) setValue("variable", name);
+  const applyPlan = [
+    ["secret", "PROOF_RUNNER_BEARER_TOKEN"],
+    ["variable", "PROOF_RUNNER_RECEIPT_KEY_ID"],
+    ["variable", "PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS"],
+    ["secret", "PROOF_RUNNER_RECEIPT_PRIVATE_KEY"],
+    ["variable", "PROOF_RUNNER_DOMAIN"],
+    ["variable", "PROOF_RUNNER_BACKUP_PATH"],
+    ["variable", "PROOF_RUNNER_BACKUP_RETENTION_DAYS"],
+    ["variable", "PROOF_RUNNER_BACKUP_INTERVAL_SECONDS"],
+    ["variable", "PROOF_RUNNER_RUNTIME_IMAGE"],
+  ];
+  for (const [kind, name] of applyPlan) setValue(kind, name);
   return { repo, environment, dryRun: false, applied, ...names };
 };
 
-if (import.meta.main) {
+const isDirectEntry = () => (
+  Boolean(process.argv[1]) && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
+
+if (isDirectEntry()) {
   try {
     const options = parseArgs(process.argv.slice(2));
     if (options.help) {

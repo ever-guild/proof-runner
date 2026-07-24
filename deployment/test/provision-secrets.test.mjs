@@ -16,6 +16,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -30,7 +32,7 @@ const createProductionEnv = () => {
   const envFile = join(directory, ".env.production");
   const publicKeyFile = join(directory, "receipt-public.pem");
   const initialized = initialize({
-    envFile,
+    outputFile: envFile,
     publicKeyFile,
     keyId: "receipt-test-1",
   });
@@ -77,7 +79,7 @@ test("init creates exclusive files with safe modes, a 48-byte token, and matchin
   assert.equal(statSync(publicKeyFile).mode & 0o777, 0o644);
   assert.equal(initialized.keyId, "receipt-test-1");
   assert.throws(
-    () => initialize({ envFile, publicKeyFile, keyId: "receipt-test-2" }),
+    () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-2" }),
     /Refusing to overwrite existing env file/,
   );
 });
@@ -86,7 +88,7 @@ test("init rejects a public-key path that would collide with the env file", () =
   const directory = mkdtempSync(join(tmpdir(), "proof-runner-secrets-"));
   const envFile = join(directory, ".env.production");
   assert.throws(
-    () => initialize({ envFile, publicKeyFile: envFile, keyId: "receipt-test-1" }),
+    () => initialize({ outputFile: envFile, publicKeyFile: envFile, keyId: "receipt-test-1" }),
     /must differ from the env file/,
   );
   assert.throws(() => statSync(envFile));
@@ -110,7 +112,7 @@ test("init removes both files it created when a post-create chmod fails", () => 
   });
 
   assert.throws(
-    () => initialize({ envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
+    () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
     (error) => error === chmodFailure,
   );
   assert.deepEqual(removed, [envFile, publicKeyFile]);
@@ -145,7 +147,7 @@ test("init removes partial secret output after an exclusive env open succeeds", 
   });
 
   assert.throws(
-    () => initialize({ envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
+    () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
     (error) => error === writeFailure,
   );
   assert.deepEqual(removed, [envFile, publicKeyFile]);
@@ -173,7 +175,7 @@ test("init preserves a foreign file when its exclusive env open fails", () => {
   });
 
   assert.throws(
-    () => initialize({ envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
+    () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
     (error) => error?.code === "EEXIST",
   );
   assert.equal(envOpenAttempts, 1);
@@ -212,7 +214,7 @@ test("init preserves the original error when close and cleanup fail", () => {
   });
 
   assert.throws(
-    () => initialize({ envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
+    () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-1", fileOps }),
     (error) => error === writeFailure,
   );
   assert.deepEqual(removed, [envFile, publicKeyFile]);
@@ -249,14 +251,36 @@ test("apply requires explicit repository and environment arguments", () => {
     /explicit --repo/,
   );
   assert.deepEqual(
-    parseArgs(["apply", "--repo", "ever-guild/proof-runner", "--environment", "production"]),
+    parseArgs([
+      "apply",
+      "--repo",
+      "ever-guild/proof-runner",
+      "--environment",
+      "production",
+      "--input-file",
+      "deployment/production.env",
+    ]),
     {
       command: "apply",
-      envFile: "deployment/.env.production",
+      inputFile: "deployment/production.env",
       repo: "ever-guild/proof-runner",
       environment: "production",
     },
   );
+  assert.deepEqual(
+    parseArgs(["init", "--output-file", "deployment/production.env"]),
+    { command: "init", outputFile: "deployment/production.env" },
+  );
+  assert.throws(() => parseArgs(["init", "--env-file", "deployment/production.env"]), /Unknown argument/);
+  assert.throws(() => parseArgs(["apply", "--env-file", "deployment/production.env"]), /Unknown argument/);
+});
+
+test("CLI direct entry runs under the supported Node invocation path", () => {
+  const script = fileURLToPath(new URL("../provision-secrets.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [script, "--help"], { encoding: "utf8" });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Usage:/);
+  assert.equal(result.stderr, "");
 });
 
 test("local validation failure makes zero gh calls", () => {
@@ -272,7 +296,7 @@ test("local validation failure makes zero gh calls", () => {
     () => applyConfiguration({
       repo: "ever-guild/proof-runner",
       environment: "production",
-      envFile,
+      inputFile: envFile,
       runCommand: successfulRunner(calls),
     }),
     /must be a real DNS hostname/,
@@ -288,7 +312,7 @@ test("unsafe env file permissions make zero gh calls", () => {
     () => applyConfiguration({
       repo: "ever-guild/proof-runner",
       environment: "production",
-      envFile,
+      inputFile: envFile,
       runCommand: successfulRunner(calls),
     }),
     /permissions are unsafe/,
@@ -302,7 +326,7 @@ test("dry-run validates and reports the target and allowlisted names without gh"
   const result = applyConfiguration({
     repo: "ever-guild/proof-runner",
     environment: "production-eu",
-    envFile,
+    inputFile: envFile,
     dryRun: true,
     runCommand: successfulRunner(calls),
   });
@@ -323,7 +347,7 @@ test("apply preflights, creates the requested Environment, and sends every value
   const result = applyConfiguration({
     repo: "ever-guild/proof-runner",
     environment: "production-eu",
-    envFile,
+    inputFile: envFile,
     runCommand: successfulRunner(calls),
   });
 
@@ -334,11 +358,30 @@ test("apply preflights, creates the requested Environment, and sends every value
   ]);
   assert.deepEqual(calls[3].args, [
     "api",
+    "--paginate",
+    "repos/ever-guild/proof-runner/environments",
+    "--jq",
+    ".environments[].name",
+  ]);
+  assert.deepEqual(calls[4].args, [
+    "api",
     "--method",
     "PUT",
     "repos/ever-guild/proof-runner/environments/production-eu",
   ]);
-  for (const call of calls.slice(4)) {
+  const expectedOrder = [
+    ["secret", "PROOF_RUNNER_BEARER_TOKEN"],
+    ["variable", "PROOF_RUNNER_RECEIPT_KEY_ID"],
+    ["variable", "PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS"],
+    ["secret", "PROOF_RUNNER_RECEIPT_PRIVATE_KEY"],
+    ["variable", "PROOF_RUNNER_DOMAIN"],
+    ["variable", "PROOF_RUNNER_BACKUP_PATH"],
+    ["variable", "PROOF_RUNNER_BACKUP_RETENTION_DAYS"],
+    ["variable", "PROOF_RUNNER_BACKUP_INTERVAL_SECONDS"],
+    ["variable", "PROOF_RUNNER_RUNTIME_IMAGE"],
+  ];
+  assert.deepEqual(calls.slice(5).map(({ args }) => [args[0], args[2]]), expectedOrder);
+  for (const call of calls.slice(5)) {
     const name = call.args[2];
     assert.deepEqual(call.args.slice(3), [
       "--repo",
@@ -352,6 +395,45 @@ test("apply preflights, creates the requested Environment, and sends every value
   assert.equal(result.applied.length, 9);
 });
 
+test("apply preserves an existing Environment and its protections", () => {
+  const { envFile } = createProductionEnv();
+  const calls = [];
+  const runCommand = (command, args, options = {}) => {
+    calls.push({ command, args, input: options.input });
+    if (args[0] === "api" && args.includes("--paginate")) {
+      return { status: 0, stdout: "production-eu\nproduction\n" };
+    }
+    return { status: 0, stdout: "" };
+  };
+  applyConfiguration({
+    repo: "ever-guild/proof-runner",
+    environment: "production-eu",
+    inputFile: envFile,
+    runCommand,
+  });
+  assert.ok(calls.some(({ args }) => args.includes("--paginate")));
+  assert.equal(calls.some(({ args }) => args[0] === "api" && args.includes("PUT")), false);
+});
+
+test("failed Environment listing stops before any remote mutation", () => {
+  const { envFile } = createProductionEnv();
+  const calls = [];
+  assert.throws(
+    () => applyConfiguration({
+      repo: "ever-guild/proof-runner",
+      environment: "production-eu",
+      inputFile: envFile,
+      runCommand: successfulRunner(
+        calls,
+        ({ args }) => args[0] === "api" && args.includes("--paginate"),
+      ),
+    }),
+    /Failed to list GitHub Environments/,
+  );
+  assert.equal(calls.some(({ args }) => args.includes("PUT")), false);
+  assert.equal(calls.some(({ args }) => args[0] === "secret" || args[0] === "variable"), false);
+});
+
 test("failed gh authentication stops before repository or Environment mutation", () => {
   const { envFile } = createProductionEnv();
   const calls = [];
@@ -359,7 +441,7 @@ test("failed gh authentication stops before repository or Environment mutation",
     () => applyConfiguration({
       repo: "ever-guild/proof-runner",
       environment: "production",
-      envFile,
+      inputFile: envFile,
       runCommand: successfulRunner(calls, ({ args }) => args[0] === "auth"),
     }),
     /authentication check failed/,
@@ -378,7 +460,7 @@ test("partial remote failure reports parameter names but never values", () => {
     () => applyConfiguration({
       repo: "ever-guild/proof-runner",
       environment: "production",
-      envFile,
+      inputFile: envFile,
       runCommand: successfulRunner(
         calls,
         ({ args }) => args[0] === "variable" && args[2] === "PROOF_RUNNER_RECEIPT_KEY_ID",
@@ -401,7 +483,7 @@ test("invalid repo target is rejected before reading or invoking gh", () => {
     () => applyConfiguration({
       repo: "implicit",
       environment: "production",
-      envFile: "/does/not/matter",
+      inputFile: "/does/not/matter",
       runCommand: successfulRunner(calls),
     }),
     /explicit owner\/repo/,
@@ -414,7 +496,7 @@ test("missing environment is rejected before reading or invoking gh", () => {
   assert.throws(
     () => applyConfiguration({
       repo: "ever-guild/proof-runner",
-      envFile: "/does/not/matter",
+      inputFile: "/does/not/matter",
       runCommand: successfulRunner(calls),
     }),
     /--environment is invalid/,
