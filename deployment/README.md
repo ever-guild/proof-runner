@@ -21,6 +21,20 @@ ownership and inject these values from the host secret manager or a host-only
   the Docker volume; it is mounted only by the backup service.
 
 Do not put any of those values in Git, container images, an issue, or logs.
+To create a new runner token and dedicated Ed25519 receipt key on the worker,
+copy the example env file and run:
+
+```sh
+cp deployment/.env.example deployment/.env
+chmod 600 deployment/.env
+node deployment/provision-secrets.mjs --env-file deployment/.env
+```
+
+The script writes the token and private key only to the local `.env` file and
+writes the non-secret public receipt key next to it. It refuses to overwrite
+existing values. Receipt-key rotation must preserve the previous public key and
+use a new key ID; it is intentionally not automated by this bootstrap script.
+
 Build the untrusted-job runtime image on that same Docker engine before the
 runner starts:
 
