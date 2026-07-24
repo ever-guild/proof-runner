@@ -13,7 +13,7 @@ export function Scene5Receipt({ onReset }: { onReset: () => void }) {
         </div>
         <h2 className="text-3xl font-semibold text-slate-100">Proof Verified</h2>
         <p className="text-slate-400 max-w-sm">
-          The codebase was autonomously fixed, all tests passed, and the cryptographic receipt has been generated.
+          The fixed demo revision passed all configured checks. This screen uses sample receipt data.
         </p>
       </div>
 
@@ -23,26 +23,26 @@ export function Scene5Receipt({ onReset }: { onReset: () => void }) {
         
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-pass">Cryptographic Receipt</CardTitle>
-            <Badge variant="pass">MINTED</Badge>
+            <CardTitle className="text-pass">Demo Receipt</CardTitle>
+            <Badge variant="pass">PASS</Badge>
           </div>
-          <CardDescription>Execution verified on-chain.</CardDescription>
+          <CardDescription>Sample off-chain receipt layout.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 relative z-10">
           <div className="space-y-1">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Transaction Hash</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Report Hash</p>
             <p className="font-mono text-sm text-slate-300 break-all bg-slate-950 p-2 rounded border border-slate-800">
-              0x7f4a28b991c1032a4e9b7f5d91c2b4a8e2f9d1c3a6b5e8c7d9a1b2c3d4e5f6g7
+              7f4a28b991c1032a4e9b7f5d91c2b4a8e2f9d1c3a6b5e8c7d9a1b2c3d4e5f607
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
              <div className="space-y-1">
-              <p className="text-xs text-slate-500 uppercase tracking-wider">Agent</p>
-              <p className="font-mono text-sm text-slate-300">Antigravity-v2</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Skill</p>
+              <p className="font-mono text-sm text-slate-300">node-typescript@1</p>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-slate-500 uppercase tracking-wider">Cost</p>
-              <p className="font-mono text-sm text-slate-300">0.0042 ETH</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Signature</p>
+              <p className="font-mono text-sm text-slate-300">Not issued for demo data</p>
             </div>
           </div>
         </CardContent>

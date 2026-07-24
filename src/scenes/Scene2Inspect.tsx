@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { Separator } from "../components/ui/separator"
@@ -11,7 +11,7 @@ export function Scene2Inspect({ onNext }: { onNext: () => void }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Repository Inspection</CardTitle>
-          <Badge variant="pass">VERIFIED</Badge>
+          <Badge variant="queued">SUPPORTED</Badge>
         </div>
         <CardDescription>
           ever-guild/proof-runner

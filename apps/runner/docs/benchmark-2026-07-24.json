@@ -1,0 +1,30 @@
+{
+  "contractVersion": "1.0",
+  "repositoryUrl": "https://github.com/a-a-game-studio/aa-entity",
+  "resolvedCommitSha": "d3137ab6281fb60db1459a596fecf6c6f408a1e7",
+  "skillHash": "96de617cc0440c7a759d4055fa66e06481c2abac653616d45cbc467dd01eb852",
+  "runtimeImageDigest": "sha256:dfc62a20d002ed04af384cb1caccda3e0a8314435c83d074d79de4511e95dd2a",
+  "ref": {
+    "type": "branch",
+    "value": "master"
+  },
+  "worker": "local-dedicated-docker-worker",
+  "observedAt": "2026-07-23T23:17:35.729Z",
+  "runs": [
+    10480,
+    10767,
+    11285,
+    11644,
+    11022,
+    10756,
+    11107,
+    10343,
+    10697,
+    10399
+  ],
+  "p95Ms": 11644,
+  "maximumMs": 11644,
+  "hardCapMs": 180000,
+  "targetP95Ms": 90000,
+  "passed": true
+}

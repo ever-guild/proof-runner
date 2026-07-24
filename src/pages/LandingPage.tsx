@@ -1,16 +1,32 @@
 import * as React from "react"
-import { Shield, GitBranch, ArrowRight, TerminalSquare, Lock, Activity, Bot } from "lucide-react"
+import { Lock, Bot } from "lucide-react"
+import { Link } from "react-router-dom"
 import { Button } from "../components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card"
 import { Input } from "../components/ui/input"
 import { Badge } from "../components/ui/badge"
+import { isCanonicalGitHubRepository } from "../lib/demo"
 
 export function LandingPage() {
-  const [inspectState, setInspectState] = React.useState<"idle" | "inspecting" | "supported">("idle")
+  const [repositoryUrl, setRepositoryUrl] = React.useState("https://github.com/ever-guild/proof-runner")
+  const [gitRef, setGitRef] = React.useState("main")
+  const [inspectState, setInspectState] = React.useState<"idle" | "supported">("idle")
+  const [error, setError] = React.useState("")
 
-  const handleInspect = () => {
-    setInspectState("inspecting")
-    setTimeout(() => setInspectState("supported"), 1500)
+  const handleInspect = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!isCanonicalGitHubRepository(repositoryUrl)) {
+      setError("Use a canonical https://github.com/owner/repository URL.")
+      setInspectState("idle")
+      return
+    }
+    if (!gitRef.trim()) {
+      setError("Enter a branch, tag, or commit SHA.")
+      setInspectState("idle")
+      return
+    }
+    setError("")
+    setInspectState("supported")
   }
 
   return (
@@ -29,8 +45,8 @@ export function LandingPage() {
             ProofRunner executes an exact Git commit in an isolated environment using a pinned verification skill and returns a reproducible PASS / FAIL receipt.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button variant="primary" size="lg" className="w-full sm:w-auto font-semibold">Verify a repository</Button>
-            <Button variant="secondary" size="lg" className="w-full sm:w-auto font-semibold">View a real receipt</Button>
+            <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Preview verification</a></Button>
+            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View demo receipt</Link></Button>
           </div>
           <p className="mt-6 text-sm text-slate-300 font-medium">
             <a href="/skill.md" className="hover:text-indigo-300 transition-colors">Using an AI agent? Get the skill file →</a>
@@ -50,40 +66,35 @@ export function LandingPage() {
       </section>
 
       {/* Interactive Verification Form */}
-      <section className="w-full py-20 px-4 relative">
+      <section id="verify" className="w-full py-20 px-4 relative scroll-mt-20">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
         <div className="container mx-auto max-w-2xl relative z-10">
           <Card className="p-2 border-white/20">
             <CardHeader>
-              <CardTitle className="text-white text-xl">Verify Repository</CardTitle>
+              <h2 className="text-white text-xl font-semibold">Verify Repository</h2>
               <CardDescription className="text-slate-300 text-sm">Enter a public GitHub repository to start inspection.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent>
+              <form className="space-y-6" onSubmit={handleInspect} noValidate>
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-200">Repository URL</label>
-                  <Input placeholder="https://github.com/owner/repository" defaultValue="https://github.com/ever-guild/proof-runner" />
+                  <label htmlFor="repository-url" className="text-sm font-semibold text-slate-200">Repository URL</label>
+                  <Input id="repository-url" name="repositoryUrl" type="url" required aria-describedby={error ? "repository-error" : undefined} aria-invalid={Boolean(error)} placeholder="https://github.com/owner/repository" value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} />
+                  {error && <p id="repository-error" role="alert" className="text-sm text-fail">{error}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-200">Git reference</label>
-                  <Input placeholder="Branch, tag or commit SHA" defaultValue="HEAD" />
+                  <label htmlFor="git-ref" className="text-sm font-semibold text-slate-200">Git reference</label>
+                  <Input id="git-ref" name="gitRef" required placeholder="Branch, tag or full commit SHA" value={gitRef} onChange={(event) => setGitRef(event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-200">Verification profile</label>
-                  <Input readOnly value="Auto-detect (Node.js / TypeScript)" className="text-slate-400 bg-white/5" />
+                  <label htmlFor="verification-profile" className="text-sm font-semibold text-slate-200">Verification profile</label>
+                  <Input id="verification-profile" readOnly value="Auto-detect (Node.js / TypeScript)" className="text-slate-400 bg-white/5" />
                 </div>
               </div>
 
               {inspectState === "idle" && (
-                <Button variant="primary" className="w-full font-semibold" onClick={handleInspect}>
-                  Inspect repository — free
-                </Button>
-              )}
-
-              {inspectState === "inspecting" && (
-                <Button variant="secondary" className="w-full text-slate-200 font-semibold" disabled>
-                  <Activity className="w-4 h-4 mr-2 animate-spin text-indigo-400" />
-                  Analyzing repository...
+                <Button type="submit" variant="primary" className="w-full font-semibold">
+                  Preview inspection
                 </Button>
               )}
 
@@ -91,9 +102,10 @@ export function LandingPage() {
                 <div className="space-y-6 animate-fade-in-up">
                   <div className="p-4 rounded-xl bg-white/10 border border-white/20 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-white">Repository supported</span>
-                      <Badge variant="pass">VERIFIED</Badge>
+                      <span className="text-sm font-semibold text-white">Demo inspection preview</span>
+                      <Badge variant="queued">DEMO DATA</Badge>
                     </div>
+                    <p className="text-xs text-slate-400 break-all">{repositoryUrl} · {gitRef}</p>
                     <div className="grid grid-cols-2 gap-4 text-sm mt-4">
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Stack</p>
@@ -101,28 +113,25 @@ export function LandingPage() {
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Skill</p>
-                        <p className="text-slate-200 font-mono text-xs">node-typescript-acceptance@0.1.0</p>
+                        <p className="text-slate-200 font-mono text-xs">node-typescript@1</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Duration</p>
-                        <p className="text-slate-200 font-mono text-xs">40–90 seconds</p>
+                        <p className="text-slate-200 font-mono text-xs">Not measured</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Price</p>
-                        <p className="text-emerald-400 font-mono text-xs font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.8)]">0.01 USD₮</p>
+                        <p className="text-slate-200 font-mono text-xs">Free launch fallback</p>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <Button variant="primary" className="flex-1 font-semibold" onClick={() => window.location.href='/runs/demo-123'}>
-                      Run verification
-                    </Button>
-                    <Button variant="secondary" className="flex-1 font-semibold text-slate-200" onClick={() => window.location.href='/runs/fail-demo'}>
-                      or run broken demo
-                    </Button>
+                    <Button asChild variant="primary" className="flex-1 font-semibold"><Link to="/runs/demo-123">Run passing demo</Link></Button>
+                    <Button asChild variant="secondary" className="flex-1 font-semibold text-slate-200"><Link to="/runs/fail-demo">Run broken demo</Link></Button>
                   </div>
                 </div>
               )}
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -188,15 +197,15 @@ export function LandingPage() {
           <div className="flex-1 space-y-6">
             <Badge variant="queued" showIcon={false} className="mb-2 border-white/20 text-slate-300"><Bot className="w-3 h-3 mr-2 inline text-indigo-400" /> A2MCP</Badge>
             <h2 className="text-3xl font-bold text-white">Built for agents, not just browsers</h2>
-            <p className="text-slate-300 leading-relaxed">ProofRunner is available as an A2MCP service on OKX.AI. Agents can inspect a repository, pay per verification through x402, start a run and consume the result as structured JSON.</p>
+            <p className="text-slate-300 leading-relaxed">The frozen A2MCP contract lets agents inspect a repository, start a run, poll normalized status, and consume a receipt as structured JSON. Public OKX.AI availability and paid x402 mode are not claimed until they are live.</p>
             <div className="flex gap-4 pt-4">
-              <Button variant="secondary" className="font-semibold text-white border-white/20" onClick={() => window.open('/skill.md')}>Open skill.md</Button>
-              <Button variant="ghost" className="font-semibold text-slate-300">View on OKX.AI</Button>
+              <Button asChild variant="secondary" className="font-semibold text-white border-white/20"><a href="/skill.md">Open skill.md</a></Button>
+              <Button asChild variant="ghost" className="font-semibold text-slate-300"><a href="/llms.txt">Open llms.txt</a></Button>
             </div>
           </div>
           <div className="flex-1 w-full">
             <div className="rounded-xl border border-white/20 bg-black/90 p-6 font-mono text-sm leading-relaxed text-slate-300 shadow-glass">
-              <span className="text-indigo-400 font-bold">Fetch</span> <span className="text-white">https://proof.ever-guild.net/skill.md</span><br/>
+              <span className="text-indigo-400 font-bold">Fetch</span> <span className="text-white">/skill.md</span><br/>
               <span className="text-indigo-400 font-bold">and use</span> ProofRunner to verify the specified public Git repository and commit.<br/><br/>
               <span className="text-indigo-400 font-bold">Return</span> the verdict, failed checks, evidence, and public receipt URL.
             </div>

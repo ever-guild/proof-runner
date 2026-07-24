@@ -52,7 +52,7 @@ export const WithIcon: Story = {
         <Play className="w-4 h-4 mr-2" />
         Run Inspection
       </Button>
-      <Button variant="secondary" size="icon">
+      <Button variant="secondary" size="icon" aria-label="Open settings">
         <Settings className="w-4 h-4" />
       </Button>
     </div>

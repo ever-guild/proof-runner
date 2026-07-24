@@ -2,7 +2,6 @@ import * as React from "react"
 import { Terminal } from "../components/ui/terminal"
 import { Badge } from "../components/ui/badge"
 import { Spinner } from "../components/ui/spinner"
-import { Button } from "../components/ui/button"
 
 export function Scene3Run({ onNext }: { onNext: () => void }) {
   React.useEffect(() => {

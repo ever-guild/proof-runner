@@ -31,8 +31,8 @@ export const Default: Story = {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Repository URL</label>
-          <Input placeholder="https://github.com/..." />
+          <label htmlFor="storybook-repository" className="text-sm font-medium text-slate-400 uppercase tracking-wider">Repository URL</label>
+          <Input id="storybook-repository" placeholder="https://github.com/..." />
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
@@ -43,21 +43,21 @@ export const Default: Story = {
   ),
 };
 
-export const Receipt: Story = {
+export const DemoReceipt: Story = {
   render: () => (
     <Card className="border-pass/30 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
       <CardHeader>
-        <CardTitle className="text-pass">Cryptographic Receipt</CardTitle>
-        <CardDescription>Execution verified and stored.</CardDescription>
+        <CardTitle className="text-pass">Demo Receipt</CardTitle>
+        <CardDescription>Sample layout; not a signed production receipt.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1">
-          <p className="text-xs text-slate-500 uppercase tracking-wider">Transaction Hash</p>
-          <p className="font-mono text-sm text-slate-300 break-all">0x7f4a2...b991c</p>
+          <p className="text-xs text-slate-500 uppercase tracking-wider">Report Hash</p>
+          <p className="font-mono text-sm text-slate-300 break-all">7f4a2...b991c</p>
         </div>
         <div className="space-y-1">
-          <p className="text-xs text-slate-500 uppercase tracking-wider">Cost</p>
-          <p className="font-mono text-sm text-slate-300">0.0042 ETH</p>
+          <p className="text-xs text-slate-500 uppercase tracking-wider">Signature</p>
+          <p className="font-mono text-sm text-slate-300">Not issued for demo data</p>
         </div>
       </CardContent>
     </Card>

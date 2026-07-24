@@ -1,40 +1,48 @@
 ---
 name: proofrunner
-description: Independently verify a public Git repository and exact commit by executing a pinned verification skill in an isolated environment.
+description: Inspect a public GitHub repository and verify an exact commit with a pinned Node.js/TypeScript skill.
 ---
 
-ProofRunner is an A2MCP service on OKX.AI.
+# ProofRunner integration contract
+
+This file documents the frozen MVP contract. The checked-in web flow currently
+uses explicitly labelled demo data; treat endpoints as available only after the
+deployment publishes them successfully.
 
 ## When to use ProofRunner
-Use ProofRunner when you need independent verification that a software delivery (built by an AI agent or a human) successfully compiles, installs dependencies, and passes its test suite. ProofRunner executes code in a sandboxed environment and issues a cryptographic receipt.
 
-## Limitations
-- **NOT A SECURITY AUDIT**: ProofRunner does not guarantee the code is free of vulnerabilities or malware. It only proves the specified skill ran successfully.
-- Public Node.js / TypeScript repositories only.
-- npm and pnpm supported. No Yarn.
-- No access to repository secrets or custom shell commands.
+Use ProofRunner to execute configured install, build, and test checks against an
+immutable public Git commit. A PASS means only that the checks named in the
+receipt passed. It is not a security audit or a guarantee that the code is free
+of defects or malware.
 
-## API Endpoints
+## MVP limits
 
-### 1. Inspect Repository
-`POST /api/inspect`
-Check if a repository is supported and get the verification profile.
-```json
-{
-  "repositoryUrl": "https://github.com/owner/repository",
-  "gitRef": "main"
-}
-```
+- Canonical public `https://github.com/owner/repository` URLs only.
+- Node.js and TypeScript projects using npm or pnpm with a lockfile.
+- No repository secrets, private repositories, or user-provided shell commands.
+- A timeout, registry outage, or runner failure is INCONCLUSIVE, never FAIL.
 
-### 2. Run Verification
-`POST /api/verify`
-Start a verification run. Payment required (HTTP 402) using x402 schema.
-Returns run ID and status.
+## Public API contract
 
-### 3. Check Status
-`GET /api/runs/{id}`
-Poll this endpoint until status is `COMPLETED`, `TIMEOUT`, or `SYSTEM ERROR`.
+All JSON requests include the frozen contract version.
 
-### 4. Fetch Receipt
-`GET /api/receipts/{id}`
-Returns the final verification receipt including the verdict (PASS, FAIL, INCONCLUSIVE) and report hash.
+- `POST /api/inspect` resolves a branch, tag, or commit to a full immutable SHA
+  without executing repository code.
+- `POST /api/verify` starts a verification. It requires an `Idempotency-Key`.
+- `GET /api/runs/{id}` returns `QUEUED`, `RUNNING`, `COMPLETED`, `TIMEOUT`, or
+  `SYSTEM_ERROR`. Poll until a terminal status.
+- `GET /api/receipts/{id}` returns a signed receipt when receipt issuance is
+  implemented and the run has a report.
+
+Verdicts are `PASS`, `FAIL`, or `INCONCLUSIVE`; run status and verdict are
+separate fields.
+
+## A2MCP and payment modes
+
+The frozen agent routes are `POST /a2mcp/inspect_repository` and
+`POST /a2mcp/verify_repository`. Inspection is free. Verification launches in
+free HTTP 200 mode unless paid mode is explicitly configured and validated.
+Paid mode may return HTTP 402 with a `PAYMENT-REQUIRED` header before a paid
+replay. Do not assume x402 or OKX.AI availability until the public service is
+listed as live.

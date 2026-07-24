@@ -2,21 +2,28 @@
 
 Independent execution verification for agent-generated software.
 
-## Core
+Status: the checked-in web flow is a demo preview. API, receipt, HTTPS, and
+OKX.AI availability must be confirmed against the deployed service.
+
+## Human and agent surfaces
+
+- Human interface: /
+- Agent contract: /skill.md
+- Demo PASS receipt: /examples/passed
+- Demo FAIL receipt: /examples/broken
+
+## Frozen API routes
 
 - Inspect repository: POST /api/inspect
 - Start verification: POST /api/verify
 - Run status: GET /api/runs/{id}
 - Receipt JSON: GET /api/receipts/{id}
-- Agent skill: /skill.md
-- Human interface: /
-- Example PASS receipt: /examples/passed
-- Example FAIL receipt: /examples/broken
 
 ## MVP limitations
 
-- Public GitHub repositories only
+- Canonical public GitHub repositories only
 - Node.js and TypeScript only
-- npm and pnpm only
-- No repository secrets
-- No user-provided shell commands
+- npm and pnpm lockfiles only
+- No repository secrets or user-provided shell commands
+- PASS covers only the checks named in the receipt
+- Timeout and infrastructure failures are INCONCLUSIVE, never FAIL

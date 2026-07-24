@@ -1,0 +1,3 @@
+[submodule "escape"]
+	path = escape
+	url = https://github.com/example/example

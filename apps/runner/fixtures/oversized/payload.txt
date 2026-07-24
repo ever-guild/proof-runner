@@ -1,0 +1,1 @@
+This fixture becomes oversized when the repository-byte test limit is set below this sentence.

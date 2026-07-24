@@ -37,9 +37,9 @@ export const Destructive: Story = {
   render: () => (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertTitle>Execution Failed</AlertTitle>
+      <AlertTitle>Run inconclusive</AlertTitle>
       <AlertDescription>
-        Your code execution failed due to a timeout. Please review the logs and try again.
+        Execution timed out. The verdict is INCONCLUSIVE; review the normalized checks before retrying.
       </AlertDescription>
     </Alert>
   ),
@@ -51,7 +51,7 @@ export const Success: Story = {
       <CheckCircle2 className="h-4 w-4" />
       <AlertTitle>Verification Complete</AlertTitle>
       <AlertDescription>
-        The repository has been successfully verified. Cryptographic receipt generated.
+        All configured demo checks passed. Production receipt issuance is not represented by this story.
       </AlertDescription>
     </Alert>
   ),

@@ -1,0 +1,10 @@
+{
+  "name": "@ever-guild/proof-runner-pnpm-passing-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "build": "node -e \"require('node:fs').writeFileSync('built.txt', 'ok')\"",
+    "test": "node -e \"if (require('node:fs').readFileSync('built.txt', 'utf8') !== 'ok') process.exit(1)\""
+  }
+}
