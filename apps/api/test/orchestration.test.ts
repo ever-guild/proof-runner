@@ -92,7 +92,7 @@ describe("inspection and run orchestration", () => {
 
   it("inspects committed metadata without executing a repository", async () => {
     const service = new InspectionService(gateway);
-    await expect(service.inspect("https://github.com/acme/example", { type: "branch", value: "main" })).resolves.toMatchObject({ supported: true, inspection: { resolvedCommitSha: sha, packageManager: "pnpm", hasTypeScript: true, selectedSkill: "node-typescript@1" } });
+    await expect(service.inspect("https://github.com/acme/example", { type: "branch", value: "main" })).resolves.toMatchObject({ supported: true, inspection: { resolvedCommitSha: sha, packageManager: "pnpm", hasTypeScript: true, selectedSkill: "node-typescript@1", selectedSkillHash: expect.stringMatching(/^[a-f0-9]{64}$/) } });
   });
 
   it("serves the free A2MCP inspection and verification contracts with HTTP 200", async () => {

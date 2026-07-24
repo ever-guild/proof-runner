@@ -63,6 +63,7 @@ const RepositoryInspectionSchema = z.object({
     test: z.string().min(1).nullable(),
   }),
   selectedSkill: z.literal("node-typescript@1"),
+  selectedSkillHash: Sha256Schema,
 });
 
 export const UnsupportedReasonSchema = z.enum([

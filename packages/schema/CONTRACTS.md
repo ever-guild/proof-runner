@@ -24,6 +24,12 @@ FIFO `queuePosition`. A new request beyond that bound returns HTTP 429 with
 `error.code = "RUN_QUEUE_FULL"` and `retryable = true`. Idempotent replays do
 not consume another queue slot.
 
+For a supported inspection, `inspection.selectedSkillHash` is the SHA-256 hash
+of the server-selected skill manifest. Clients must pass that exact value as
+`skill.hash` when creating a verification request; this pins the run to the
+skill the service inspected and prevents a browser from selecting another
+skill version.
+
 Run `status` represents transport/execution lifecycle only. `verdict`
 represents verification meaning. TIMEOUT and SYSTEM_ERROR are always
 INCONCLUSIVE, never FAIL. Repository, sandbox, install, build, test, and receipt

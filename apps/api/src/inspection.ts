@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { type InspectResult, CONTRACT_VERSION } from "@ever-guild/proof-runner-schema";
 
 type Ref = { type: "branch" | "tag" | "commit"; value: string };
@@ -56,6 +58,9 @@ type PackageJson = {
   devDependencies?: Record<string, unknown>;
 };
 const LIFECYCLE_SCRIPTS = new Set(["preinstall", "install", "postinstall", "prepublish", "prepare", "pnpm:devPreinstall"]);
+const NODE_TYPESCRIPT_SKILL_HASH = createHash("sha256")
+  .update(readFileSync(new URL("../../../skills/node-typescript/skill.json", import.meta.url)))
+  .digest("hex");
 
 const unsupported = (reason: Extract<InspectResult, { supported: false }>["reason"], message: string): InspectResult => ({
   contractVersion: CONTRACT_VERSION, supported: false, reason, message,
@@ -120,6 +125,7 @@ export class InspectionService {
           test: typeof scripts.test === "string" ? scripts.test : null,
         },
         selectedSkill: "node-typescript@1",
+        selectedSkillHash: NODE_TYPESCRIPT_SKILL_HASH,
       },
     };
   }

@@ -5,8 +5,41 @@ import { Card, CardContent, CardHeader } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { demoReceipts, getDemoKind } from "../lib/demo"
+import { getReceipt } from "../lib/api"
 
 export function ReceiptPage() {
+  const { id } = useParams()
+  const location = useLocation()
+  const isDemo = id === "passed" || id === "broken" || location.pathname.startsWith("/examples/")
+  return isDemo ? <DemoReceiptPage /> : <LiveReceiptPage id={id} />
+}
+
+function LiveReceiptPage({ id }: { id: string | undefined }) {
+  const [receipt, setReceipt] = React.useState<unknown>(null)
+  const [error, setError] = React.useState("")
+  React.useEffect(() => {
+    if (!id) return
+    void getReceipt(id).then(setReceipt).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Receipt could not be loaded."))
+  }, [id])
+  if (error) return <div className="container mx-auto max-w-3xl px-4 py-16 text-fail">{error}</div>
+  if (!receipt) return <div className="container mx-auto max-w-3xl px-4 py-16 text-slate-300">Loading signed receipt…</div>
+  const payload = JSON.stringify(receipt, null, 2)
+  const downloadJson = () => {
+    const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }))
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `proofrunner-receipt-${id}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+  return <div className="container mx-auto px-4 py-16 max-w-3xl animate-fade-in-up">
+    <div className="mb-8 text-center"><p className="mb-3 text-xs font-mono font-semibold uppercase tracking-widest text-indigo-300">Signed receipt</p><h1 className="text-3xl font-bold text-white">Verification evidence</h1></div>
+    <Card className="mb-8"><CardHeader><h2 className="tracking-wider uppercase text-sm font-semibold text-slate-400">Canonical receipt JSON</h2></CardHeader><CardContent><pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{payload}</pre></CardContent></Card>
+    <div className="flex justify-center"><Button type="button" variant="secondary" className="gap-2" onClick={downloadJson}><Download className="w-4 h-4" /> Download signed JSON</Button></div>
+  </div>
+}
+
+function DemoReceiptPage() {
   const { id } = useParams()
   const location = useLocation()
   const kind = getDemoKind(id, location.pathname)
