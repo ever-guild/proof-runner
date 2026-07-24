@@ -37,7 +37,7 @@ describe("internal runner HTTP contract", () => {
     const sandbox = {
       execute: () => new Promise<SandboxExecution>(() => undefined),
     };
-    server = createRunnerServer(config, new RunnerService(config, sandbox));
+    server = createRunnerServer(config, new RunnerService(config, sandbox), { isReady: async () => true });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
@@ -82,6 +82,26 @@ describe("internal runner HTTP contract", () => {
     expect(await mismatch.json()).toMatchObject({
       error: { code: "VERSION_MISMATCH" },
     });
+  });
+
+  it("exposes health probes without exposing the internal control plane", async () => {
+    expect(await (await fetch(`${origin}/health/live`)).json()).toEqual({ status: "live" });
+    expect(await (await fetch(`${origin}/health/ready`)).json()).toEqual({ status: "ready" });
+    const unauthorized = await request("/internal/v1/runs/missing/status", "GET", undefined, "");
+    expect(unauthorized.status).toBe(401);
+  });
+
+  it("reports not ready when Docker or the API callback cannot be reached", async () => {
+    const unavailable = createRunnerServer(config, new RunnerService(config, { execute: () => new Promise<SandboxExecution>(() => undefined) }), { isReady: async () => false });
+    await new Promise<void>((resolve) => unavailable.listen(0, "127.0.0.1", resolve));
+    const address = unavailable.address() as AddressInfo;
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/health/ready`);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ status: "not_ready" });
+    } finally {
+      await new Promise<void>((resolve, reject) => unavailable.close((error) => error ? reject(error) : resolve()));
+    }
   });
 
   it("dispatches, reports status, renews heartbeat, and cancels", async () => {

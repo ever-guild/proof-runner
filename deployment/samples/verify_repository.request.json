@@ -1,0 +1,9 @@
+{
+  "contractVersion": "1.0",
+  "idempotencyKey": "proofrunner-demo-20260724-001",
+  "repositoryUrl": "https://github.com/ever-guild/proof-runner",
+  "resolvedCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "resolvedRef": { "type": "branch", "value": "main" },
+  "skill": { "name": "node-typescript", "version": "1", "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+  "public": false
+}

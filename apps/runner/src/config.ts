@@ -27,6 +27,17 @@ export interface RunnerConfig {
 
 export const HARD_EXECUTION_TIMEOUT_MS = 180_000;
 
+const isInternalServiceUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return true;
+    if (url.protocol !== "http:") return false;
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || !url.hostname.includes(".");
+  } catch {
+    return false;
+  }
+};
+
 const integer = (
   env: NodeJS.ProcessEnv,
   name: string,
@@ -50,7 +61,7 @@ export const loadRunnerConfig = (
     throw new Error("PROOF_RUNNER_BEARER_TOKEN must contain at least 32 characters");
   }
   const apiCallbackUrl = env.PROOF_RUNNER_API_URL ?? null;
-  if (apiCallbackUrl !== null && !apiCallbackUrl.startsWith("https://") && !apiCallbackUrl.startsWith("http://127.0.0.1:")) {
+  if (apiCallbackUrl !== null && !isInternalServiceUrl(apiCallbackUrl)) {
     throw new Error("PROOF_RUNNER_API_URL must be an internal HTTP(S) URL");
   }
 

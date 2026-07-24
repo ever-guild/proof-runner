@@ -1,0 +1,22 @@
+FROM node:22-alpine AS build
+
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/runner ./apps/runner
+COPY packages/schema ./packages/schema
+COPY skills/node-typescript ./skills/node-typescript
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @ever-guild/proof-runner-runner... build
+
+FROM node:22-alpine
+WORKDIR /app
+RUN apk add --no-cache docker-cli
+ENV NODE_ENV=production
+COPY --from=build /app /app
+RUN mkdir -p /opt/proof-runner-assets \
+  && cp /app/apps/runner/docker/inspect.cjs /opt/proof-runner-assets/inspect.cjs \
+  && cp /app/apps/runner/docker/squid.conf /opt/proof-runner-assets/squid.conf
+VOLUME ["/opt/proof-runner-assets"]
+EXPOSE 8788
+CMD ["node", "apps/runner/dist/index.js"]

@@ -15,6 +15,10 @@ PR-001 intentionally contains only the buildable application skeleton and
 frozen contracts. Product behavior starts in later tasks. See
 [`packages/schema/CONTRACTS.md`](packages/schema/CONTRACTS.md).
 
+Production topology, secret provisioning boundaries, health probes, SQLite
+backup, and frozen A2MCP registration samples are in
+[`deployment/README.md`](deployment/README.md).
+
 ## Development
 
 Requires Node.js 22 or newer and pnpm 10.32.1.
