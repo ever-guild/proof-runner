@@ -255,6 +255,23 @@ export class RunStore {
     });
   }
 
+  /**
+   * Returns a run to its original FIFO position when the runner explicitly
+   * reports that its single slot is still occupied. This differs from an
+   * ambiguous transport failure: the runner has confirmed it did not accept
+   * the dispatch, so preserving the queued work is safe.
+   */
+  requeue(id: string): boolean {
+    return this.database.prepare(
+      `UPDATE run_metadata
+       SET status = 'QUEUED', verdict = NULL, active_stage = NULL,
+           started_at = NULL, completed_at = NULL, report_json = NULL,
+           system_error_code = NULL, system_error_message = NULL,
+           system_error_retryable = NULL, result_fingerprint = NULL
+       WHERE id = ? AND status = 'RUNNING'`,
+    ).run(id).changes === 1;
+  }
+
   heartbeat(id: string, stage: NormalizedCheck["stage"] | null): boolean {
     if (stage === null) {
       return this.database.prepare(

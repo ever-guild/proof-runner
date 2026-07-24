@@ -22,6 +22,17 @@ export interface ReceiptIssuer {
   issue(report: VerificationReport): SignedReceipt;
 }
 
+export class RunnerClientError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    readonly retryable: boolean,
+  ) {
+    super(code ?? "RUNNER_REQUEST_FAILED");
+    this.name = "RunnerClientError";
+  }
+}
+
 export type ResultDeliveryOutcome =
   | "ACCEPTED"
   | "LEASE_EXPIRED"
@@ -37,6 +48,32 @@ type ActiveRun = {
   id: string;
   leaseId: string;
   expiresAt: number;
+};
+
+const runnerClientError = async (response: Response): Promise<RunnerClientError> => {
+  let code: string | null = null;
+  let retryable = false;
+  try {
+    const body = await response.json() as {
+      error?: { code?: unknown; retryable?: unknown };
+    };
+    if (typeof body.error?.code === "string") code = body.error.code;
+    if (typeof body.error?.retryable === "boolean") {
+      retryable = body.error.retryable;
+    }
+  } catch {
+    // A malformed error response must not be mistaken for a known busy runner.
+  }
+  return new RunnerClientError(response.status, code, retryable);
+};
+
+const isRunnerUnavailable = (error: unknown): boolean => {
+  if (error instanceof RunnerClientError) {
+    return error.code === "RUNNER_UNAVAILABLE" && error.retryable;
+  }
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; retryable?: unknown };
+  return candidate.code === "RUNNER_UNAVAILABLE" && candidate.retryable === true;
 };
 
 export class HttpRunnerClient implements RunnerClient {
@@ -81,7 +118,7 @@ export class HttpRunnerClient implements RunnerClient {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new Error("RUNNER_UNAVAILABLE");
+    if (!response.ok) throw await runnerClientError(response);
     return response;
   }
 }
@@ -147,12 +184,22 @@ export class Orchestrator {
         },
         request: run.request,
       });
-    } catch {
+    } catch (error) {
       const activeLease = this.active;
       const quarantineExpiresAt =
         activeLease?.id === run.response.id && activeLease.leaseId === leaseId
           ? activeLease.expiresAt
           : expiresAt;
+      this.active = null;
+      if (isRunnerUnavailable(error) && this.store.requeue(run.response.id)) {
+        // A 503 from the runner is definitive: it did not accept this run, so
+        // retain its FIFO position and wait for the prior cancellation cleanup
+        // to release the single runner slot.
+        this.deferDispatch(
+          Math.min(1_000, Math.max(25, Math.floor(this.leaseDurationMs / 4))),
+        );
+        return;
+      }
       this.store.systemError(
         run.response.id,
         "RUNNER_UNAVAILABLE",
@@ -163,7 +210,6 @@ export class Orchestrator {
       // request before its response was lost. Ask it to cancel and retain the
       // original lease window before allowing another run to start.
       void this.runner.cancel(run.response.id).catch(() => undefined);
-      this.active = null;
       this.deferDispatch(Math.max(0, quarantineExpiresAt - Date.now()));
     }
   }

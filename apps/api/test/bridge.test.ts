@@ -250,4 +250,109 @@ describe("API-to-runner callback bridge", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("keeps a queued run retriable until delayed runner cancellation cleanup releases its slot", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-lease-cleanup-"));
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    let runnerClient: RunnerClient | null = null;
+    const runnerProxy: RunnerClient = {
+      dispatch: (dispatch: InternalDispatchRequest) => {
+        if (!runnerClient) throw new Error("runner is not ready");
+        return runnerClient.dispatch(dispatch);
+      },
+      cancel: (runId: string) => {
+        if (!runnerClient) throw new Error("runner is not ready");
+        return runnerClient.cancel(runId);
+      },
+    };
+    const orchestrator = new Orchestrator(
+      store,
+      runnerProxy,
+      { issue: () => { throw new Error("receipt issuance is not expected"); } },
+      40,
+    );
+    const runnerConfig: RunnerConfig = {
+      host: "127.0.0.1",
+      port: 0,
+      bearerToken: token,
+      apiCallbackUrl: "http://127.0.0.1:1",
+      leaseExtensionMs: 1_000,
+      runtimeImage: "unused",
+      proxyImage: "unused",
+      workspaceRoot: directory,
+      limits: {
+        repositoryBytes: 1,
+        fileCount: 1,
+        diskBytes: 1,
+        cpuCount: 1,
+        memoryBytes: 16 * 1024 * 1024,
+        pids: 16,
+        executionMs: 180_000,
+        commandOutputBytes: 1024,
+      },
+    };
+    let releaseCleanup: (() => void) | undefined;
+    const delayedCleanup = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    const executed: string[] = [];
+    const service = new RunnerService(
+      runnerConfig,
+      {
+        execute: async (runId) => {
+          executed.push(runId);
+          if (executed.length === 1) await delayedCleanup;
+          return {
+            status: "SYSTEM_ERROR",
+            report: null,
+            systemError: {
+              code: "RUNNER_FAILURE",
+              message: "Delayed cleanup completed.",
+              retryable: true,
+            },
+          };
+        },
+      },
+      null,
+    );
+    const runner = createRunnerServer(runnerConfig, service, { isReady: async () => true });
+    const dispatches = vi.spyOn(service, "dispatch");
+    const first = store.create("lease-cleanup-first", request);
+    const second = store.create("lease-cleanup-second", request);
+    if (first.kind !== "created" || second.kind !== "created") {
+      throw new Error("expected queued runs");
+    }
+
+    await new Promise<void>((resolve) => runner.listen(0, "127.0.0.1", resolve));
+    const runnerAddress = runner.address() as AddressInfo;
+    runnerClient = new HttpRunnerClient(`http://127.0.0.1:${runnerAddress.port}/`, token);
+    orchestrator.start();
+
+    try {
+      await vi.waitFor(() => expect(executed).toEqual([first.run.response.id]));
+      await vi.waitFor(() => {
+        expect(store.get(first.run.response.id)?.response).toMatchObject({
+          status: "SYSTEM_ERROR",
+          systemError: { code: "LEASE_EXPIRED" },
+        });
+      });
+      await vi.waitFor(() => expect(dispatches.mock.calls.length).toBeGreaterThan(1));
+      expect(executed).toEqual([first.run.response.id]);
+      expect(store.get(second.run.response.id)?.response).toMatchObject({
+        status: "QUEUED",
+        systemError: null,
+      });
+
+      releaseCleanup?.();
+      await vi.waitFor(() => {
+        expect(executed).toEqual([first.run.response.id, second.run.response.id]);
+      });
+    } finally {
+      releaseCleanup?.();
+      orchestrator.stop();
+      await close(runner);
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
