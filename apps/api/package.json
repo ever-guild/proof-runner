@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src test",
     "test": "vitest run --config ../../vitest.packages.config.ts",
+    "pretypecheck": "pnpm --filter @ever-guild/proof-runner-receipt build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
