@@ -182,15 +182,49 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
       if (request.method === "GET" && htmlReceiptMatch && (request.headers.accept?.includes("text/html") ?? true)) {
         const receiptId = decodePathSegment(htmlReceiptMatch[1] ?? "");
         if (receiptId !== null) {
-          const title = `Verification Receipt ${receiptId} · ProofRunner`;
-          const description = `Signed verification evidence receipt for run ${receiptId}.`;
           const fullUrl = `https://${request.headers.host ?? "proofrunner.org"}${url.pathname}`;
-          const html = renderReceiptOpenGraphHtml({
-            id: receiptId,
-            title,
-            description,
-            url: fullUrl,
-          });
+          const isDemo = receiptId === "passed" || receiptId === "broken" || receiptId === "timeout" || receiptId === "system-error" || receiptId === "inconclusive" || url.pathname.startsWith("/examples/");
+
+          if (isDemo) {
+            const kind = receiptId === "timeout" || url.pathname.includes("/timeout") ? "timeout"
+              : receiptId === "system-error" || url.pathname.includes("/system-error") ? "system-error"
+                : receiptId === "inconclusive" || url.pathname.includes("/inconclusive") ? "inconclusive"
+                  : receiptId === "broken" || url.pathname.endsWith("/broken") ? "broken"
+                    : "passed";
+            const demo = demoReceipts[kind];
+            const displayVerdict = demo.status === "TIMEOUT" ? "TIMEOUT" : demo.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR" : demo.verdict;
+            const title = `[DEMO] ${displayVerdict} Verification Receipt (${demo.gitTag}) · ProofRunner`;
+            const description = `Demo verification evidence for ${demo.repository} at tag ${demo.gitTag}: ${demo.summary}`;
+            const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
+            response.writeHead(200, {
+              "cache-control": "public, max-age=60",
+              "content-length": Buffer.byteLength(html),
+              "content-type": "text/html; charset=utf-8",
+            });
+            return response.end(html);
+          }
+
+          const liveReceipt = dependencies.receipts?.get(receiptId);
+          if (!liveReceipt) {
+            const title = `Receipt Not Found · ProofRunner`;
+            const description = `Verification receipt ${receiptId} was not found.`;
+            const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
+            response.writeHead(404, {
+              "cache-control": "no-store",
+              "content-length": Buffer.byteLength(html),
+              "content-type": "text/html; charset=utf-8",
+            });
+            return response.end(html);
+          }
+
+          const rawReceipt = liveReceipt.receipt as Record<string, unknown>;
+          const payload = rawReceipt.payload as Record<string, unknown> | undefined;
+          const report = (payload?.report ?? rawReceipt.report) as Record<string, unknown> | undefined;
+          const verdict = typeof report?.verdict === "string" ? report.verdict : typeof rawReceipt.verdict === "string" ? rawReceipt.verdict : "INCONCLUSIVE";
+
+          const title = `Verification Receipt ${receiptId} · ${verdict} · ProofRunner`;
+          const description = `Signed verification evidence receipt for run ${receiptId} with verdict ${verdict}.`;
+          const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
           response.writeHead(200, {
             "cache-control": "public, max-age=60",
             "content-length": Buffer.byteLength(html),
@@ -199,6 +233,7 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
           return response.end(html);
         }
       }
+
 
       if (request.method === "GET" && url.pathname === "/health/live") {
         return send(response, 200, { status: "live" });
