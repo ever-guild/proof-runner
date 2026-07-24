@@ -1,0 +1,122 @@
+{
+  "schema_version": "prvc.run-report/v1",
+  "executed_at": "2026-07-24T22:04:07.235Z",
+  "total_cases": 50,
+  "total_variants": 59,
+  "passed_cases": 50,
+  "failed_cases": 0,
+  "results": [
+    {
+      "case_id": "prvc.synthetic.node.core-missing-script-009",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.core-empty-repo-010",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.detect-conflicting-locks-015",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.detect-missing-manifest-016",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.sandbox-secret-env-017",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.sandbox-host-file-018",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.sandbox-docker-socket-019",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.sandbox-write-outside-020",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.sandbox-network-egress-021",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.resource-memory-limit-023",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.node.resource-log-limit-024",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.sandbox.node.oom-canary-042",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.sandbox.node.pid-fork-canary-043",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.sandbox.node.symlink-escape-044",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.sandbox.node.unhandled-signal-045",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    },
+    {
+      "case_id": "prvc.synthetic.sandbox.node.egress-leak-046",
+      "variant": "default",
+      "status": "PASS",
+      "observed_status": "SYSTEM_ERROR",
+      "observed_verdict": "INCONCLUSIVE"
+    }
+  ]
+}
