@@ -21,6 +21,8 @@ describe("frozen public contracts", () => {
       verify: { method: "POST", path: "/api/verify" },
       run: { method: "GET", path: "/api/runs/:id" },
       receipt: { method: "GET", path: "/api/receipts/:id" },
+      receiptPublicKey: { method: "GET", path: "/api/receipt-keys/:keyId" },
+      verifyReceipt: { method: "POST", path: "/api/receipts/verify" },
     });
   });
 

@@ -102,9 +102,16 @@ importers:
 
   apps/api:
     dependencies:
+      '@ever-guild/proof-runner-receipt':
+        specifier: workspace:*
+        version: link:../../packages/receipt
       '@ever-guild/proof-runner-schema':
         specifier: workspace:*
         version: link:../../packages/schema
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.1
+        version: 22.20.1
 
   apps/runner:
     dependencies:
@@ -117,6 +124,16 @@ importers:
         version: 22.20.1
 
   apps/web: {}
+
+  packages/receipt:
+    dependencies:
+      '@ever-guild/proof-runner-schema':
+        specifier: workspace:*
+        version: link:../schema
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.1
+        version: 22.20.1
 
   packages/schema:
     dependencies:

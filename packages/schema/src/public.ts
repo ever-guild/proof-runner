@@ -15,6 +15,8 @@ export const PUBLIC_API_ROUTES = {
   verify: { method: "POST", path: "/api/verify" },
   run: { method: "GET", path: "/api/runs/:id" },
   receipt: { method: "GET", path: "/api/receipts/:id" },
+  receiptPublicKey: { method: "GET", path: "/api/receipt-keys/:keyId" },
+  verifyReceipt: { method: "POST", path: "/api/receipts/verify" },
 } as const;
 
 export const RunStatusSchema = z.enum([
@@ -311,6 +313,26 @@ export const SignedReceiptSchema = z.object({
   signature: z.string().min(1),
 });
 
+export const ReceiptPublicKeySchema = z.object({
+  contractVersion: ContractVersionSchema,
+  keyId: z.string().min(1),
+  signatureAlgorithm: z.literal("Ed25519"),
+  publicKey: z.string().min(1),
+});
+
+export const ReceiptVerificationResponseSchema = z.object({
+  contractVersion: ContractVersionSchema,
+  valid: z.boolean(),
+  reason: z
+    .enum([
+      "PAYLOAD_HASH_MISMATCH",
+      "UNKNOWN_KEY",
+      "INVALID_SIGNATURE",
+      "INVALID_RECEIPT",
+    ])
+    .nullable(),
+});
+
 export const PublicErrorCodeSchema = z.enum([
   "INVALID_REQUEST",
   "IDEMPOTENCY_KEY_REQUIRED",
@@ -352,3 +374,7 @@ export type NormalizedCheck = z.infer<typeof NormalizedCheckSchema>;
 export type VerificationReport = z.infer<typeof VerificationReportSchema>;
 export type RunResponse = z.infer<typeof RunResponseSchema>;
 export type SignedReceipt = z.infer<typeof SignedReceiptSchema>;
+export type ReceiptPublicKey = z.infer<typeof ReceiptPublicKeySchema>;
+export type ReceiptVerificationResponse = z.infer<
+  typeof ReceiptVerificationResponseSchema
+>;
