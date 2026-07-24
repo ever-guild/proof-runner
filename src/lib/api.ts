@@ -41,8 +41,16 @@ export type Run = {
 }
 
 const json = async <T>(response: Response): Promise<T> => {
-  const body = await response.json() as T & { error?: { message?: string } }
-  if (!response.ok) throw new Error(body.error?.message ?? `Request failed with HTTP ${response.status}`)
+  const text = await response.text()
+  let body: (T & { error?: { message?: string } }) | null = null
+  try {
+    body = text ? (JSON.parse(text) as T & { error?: { message?: string } }) : null
+  } catch {
+    throw new Error(`Invalid response from server (HTTP ${response.status}). Make sure the API server is running at http://127.0.0.1:8787.`)
+  }
+  if (!response.ok || !body) {
+    throw new Error(body?.error?.message ?? `Request failed with HTTP ${response.status}`)
+  }
   return body
 }
 
