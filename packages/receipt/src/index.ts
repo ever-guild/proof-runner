@@ -32,16 +32,39 @@ export interface ReceiptVerifierKey {
   publicKeyPem: string;
 }
 
+const privateKey = (pem: string): KeyObject => {
+  try {
+    const key = createPrivateKey(pem);
+    if (key.asymmetricKeyType !== "ed25519") throw new Error();
+    return key;
+  } catch {
+    throw new Error("PROOF_RUNNER_RECEIPT_PRIVATE_KEY must be a valid Ed25519 private key");
+  }
+};
+
+export const validateReceiptKeyConfig = (
+  config: ReceiptSignerConfig,
+  verificationKeys: Iterable<ReceiptVerifierKey> = [],
+): void => {
+  if (!config.keyId.trim()) throw new Error("PROOF_RUNNER_RECEIPT_KEY_ID is required");
+  privateKey(config.privateKeyPem);
+  for (const key of verificationKeys) {
+    try {
+      const publicKey = createPublicKey(key.publicKeyPem);
+      if (publicKey.asymmetricKeyType !== "ed25519") throw new Error();
+    } catch {
+      throw new Error("PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS must contain valid Ed25519 public keys");
+    }
+  }
+};
+
 export class ReceiptSigner {
   readonly privateKey: KeyObject;
   readonly publicKeyPem: string;
 
   constructor(readonly config: ReceiptSignerConfig) {
     if (!config.keyId.trim()) throw new Error("PROOF_RUNNER_RECEIPT_KEY_ID is required");
-    this.privateKey = createPrivateKey(config.privateKeyPem);
-    if (this.privateKey.asymmetricKeyType !== "ed25519") {
-      throw new Error("PROOF_RUNNER_RECEIPT_PRIVATE_KEY must be an Ed25519 private key");
-    }
+    this.privateKey = privateKey(config.privateKeyPem);
     this.publicKeyPem = createPublicKey(this.privateKey)
       .export({ type: "spki", format: "pem" })
       .toString();

@@ -1,5 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { readFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -54,12 +55,22 @@ class FakeReceipts implements ReceiptIssuer {
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 
-const setup = async () => {
+const setup = async (receiptReader?: {
+  get(id: string): { receipt: unknown } | null;
+  publicKey(keyId: string): unknown | null;
+  verify(receipt: unknown): unknown;
+}) => {
   const directory = mkdtempSync(join(tmpdir(), "proof-runner-api-")); directories.push(directory);
   const store = new RunStore(join(directory, "runs.sqlite"));
   const runner = new FakeRunner(); const receipts = new FakeReceipts();
   const orchestrator = new Orchestrator(store, runner, receipts, 50);
-  const server = createApiServer({ store, inspection: new InspectionService(gateway), orchestrator, bearerToken: "t".repeat(32) });
+  const server = createApiServer({
+    store,
+    inspection: new InspectionService(gateway),
+    orchestrator,
+    bearerToken: "t".repeat(32),
+    ...(receiptReader ? { receiptReader } : {}),
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
   const base = `http://127.0.0.1:${address.port}`;
@@ -67,6 +78,23 @@ const setup = async () => {
   return { store, runner, receipts, orchestrator, base, close };
 };
 const post = async (base: string, path: string, body: unknown, headers: Record<string, string> = {}) => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+const postChunked = async (base: string, path: string, chunks: string[]) =>
+  await new Promise<{ body: unknown; status: number }>((resolve, reject) => {
+    const request = httpRequest(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    }, (response) => {
+      const responseChunks: Buffer[] = [];
+      response.on("data", (chunk) => responseChunks.push(Buffer.from(chunk)));
+      response.on("end", () => resolve({
+        body: JSON.parse(Buffer.concat(responseChunks).toString("utf8")) as unknown,
+        status: response.statusCode ?? 0,
+      }));
+    });
+    request.on("error", reject);
+    chunks.forEach((chunk) => request.write(chunk));
+    request.end();
+  });
 
 describe("inspection and run orchestration", () => {
   it("serves unauthenticated liveness and persistent-store readiness probes", async () => {
@@ -75,6 +103,37 @@ describe("inspection and run orchestration", () => {
       expect(await (await fetch(`${api.base}/health/live`)).json()).toEqual({ status: "live" });
       expect(await (await fetch(`${api.base}/health/ready`)).json()).toEqual({ status: "ready" });
     } finally { await api.close(); }
+  });
+
+  it("bounds receipt verification input before parsing or verification", async () => {
+    let verificationCalls = 0;
+    const api = await setup({
+      get: () => null,
+      publicKey: () => null,
+      verify: () => {
+        verificationCalls += 1;
+        return { contractVersion: CONTRACT_VERSION, valid: false, reason: "INVALID_RECEIPT" };
+      },
+    });
+    try {
+      const response = await postChunked(api.base, "/api/receipts/verify", [
+        "{\"padding\":\"",
+        "x".repeat(1024 * 1024),
+        "\"}",
+      ]);
+      expect(response.status).toBe(413);
+      expect(response.body).toEqual({
+        contractVersion: CONTRACT_VERSION,
+        error: {
+          code: "REQUEST_BODY_TOO_LARGE",
+          message: "Request body exceeds the 1 MiB limit.",
+          retryable: false,
+        },
+      });
+      expect(verificationCalls).toBe(0);
+    } finally {
+      await api.close();
+    }
   });
 
   it("upgrades an existing 001 persistent volume before using orchestration columns", () => {

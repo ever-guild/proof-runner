@@ -336,6 +336,7 @@ export const ReceiptVerificationResponseSchema = z.object({
 
 export const PublicErrorCodeSchema = z.enum([
   "INVALID_REQUEST",
+  "REQUEST_BODY_TOO_LARGE",
   "IDEMPOTENCY_KEY_REQUIRED",
   "IDEMPOTENCY_KEY_CONFLICT",
   "RUN_QUEUE_FULL",

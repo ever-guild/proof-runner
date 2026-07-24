@@ -8,8 +8,10 @@ import {
   ReceiptSigner,
   type ReceiptSignerConfig,
   type ReceiptVerifierKey,
+  validateReceiptKeyConfig,
   verifyReceipt,
 } from "./index.js";
+import { CONTRACT_VERSION } from "@ever-guild/proof-runner-schema";
 import { ReceiptStore, type PersistReceiptOptions, type StoredReceipt } from "./store.js";
 
 export class ReceiptService {
@@ -20,6 +22,7 @@ export class ReceiptService {
     private readonly store: ReceiptStore,
     private readonly verificationKeys: ReceiptVerifierKey[] = [],
   ) {
+    validateReceiptKeyConfig(config, verificationKeys);
     this.signer = new ReceiptSigner(config);
   }
 
@@ -38,7 +41,7 @@ export class ReceiptService {
     const legacy = this.verificationKeys.find((key) => key.keyId === keyId);
     return legacy
       ? {
-          contractVersion: "1.0",
+          contractVersion: CONTRACT_VERSION,
           keyId: legacy.keyId,
           signatureAlgorithm: "Ed25519",
           publicKey: legacy.publicKeyPem,

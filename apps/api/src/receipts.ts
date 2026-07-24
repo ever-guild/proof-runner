@@ -1,10 +1,16 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { CONTRACT_VERSION, type SignedReceipt } from "@ever-guild/proof-runner-schema";
 import {
   ReceiptService,
   ReceiptStore,
+  validateReceiptKeyConfig,
   type ReceiptVerifierKey,
 } from "@ever-guild/proof-runner-receipt";
+import {
+  InvalidJsonBodyError,
+  readJson,
+  RequestBodyTooLargeError,
+} from "./request-body.js";
 
 export interface ReceiptApiConfig {
   databasePath: string;
@@ -41,6 +47,7 @@ export const loadReceiptApiConfig = (
       throw new Error("PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS must be a JSON array of keyId/publicKeyPem entries");
     }
   }
+  validateReceiptKeyConfig({ keyId, privateKeyPem }, verificationKeys);
   return { databasePath, keyId, privateKeyPem, verificationKeys };
 };
 
@@ -54,12 +61,6 @@ const error = (response: ServerResponse, status: number, code: string, message: 
     contractVersion: CONTRACT_VERSION,
     error: { code, message, retryable: false },
   });
-};
-
-const readJson = async (request: IncomingMessage): Promise<unknown> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(Buffer.from(chunk));
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 };
 
 export const createReceiptApi = (config: ReceiptApiConfig) => {
@@ -89,7 +90,13 @@ export const createReceiptApi = (config: ReceiptApiConfig) => {
         return send(response, 200, result);
       }
       return error(response, 404, "INVALID_REQUEST", "Route was not found");
-    } catch {
+    } catch (caught) {
+      if (caught instanceof RequestBodyTooLargeError) {
+        return error(response, 413, "REQUEST_BODY_TOO_LARGE", "Request body exceeds the 1 MiB limit.");
+      }
+      if (!(caught instanceof InvalidJsonBodyError)) {
+        return error(response, 500, "INTERNAL_ERROR", "The service could not process this request.");
+      }
       return error(response, 400, "INVALID_REQUEST", "Request body must be valid JSON");
     }
   });
