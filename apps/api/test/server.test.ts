@@ -273,4 +273,38 @@ describe("public API server", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it("serves pre-rendered Open Graph HTML for receipt requests", async () => {
+
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-server-og-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts);
+    const server = createApiServer({
+      store,
+      inspection: new InspectionService(inspectionGateway),
+      orchestrator,
+      bearerToken: "t".repeat(32),
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing server address");
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/receipts/test-run-123`, {
+        headers: { accept: "text/html" },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      const html = await response.text();
+      expect(html).toContain('<meta property="og:title" content="Verification Receipt test-run-123 · ProofRunner" />');
+      expect(html).toContain('<meta property="og:description" content="Signed verification evidence receipt for run test-run-123." />');
+      expect(html).toContain('<meta property="og:type" content="website" />');
+    } finally {
+      orchestrator.stop();
+      store.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });
