@@ -15,30 +15,29 @@ export function Footer() {
           </div>
           
           <div>
-            <h4 className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">Product</h4>
+            <p className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">Product</p>
             <ul className="space-y-3 text-sm text-slate-300">
               <li><a href="/examples/passed" className="hover:text-violet-300 transition-colors font-medium">Example receipt</a></li>
-              <li><a href="#for-agents" className="hover:text-violet-300 transition-colors font-medium">For agents</a></li>
-              <li><a href="#api" className="hover:text-violet-300 transition-colors font-medium">API</a></li>
-              <li><a href="#security" className="hover:text-violet-300 transition-colors font-medium">Security</a></li>
+              <li><a href="/#for-agents" className="hover:text-violet-300 transition-colors font-medium">For agents</a></li>
+              <li><a href="/skill.md" className="hover:text-violet-300 transition-colors font-medium">API contract</a></li>
+              <li><a href="/#security" className="hover:text-violet-300 transition-colors font-medium">Security</a></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">Machine-readable</h4>
+            <p className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">Machine-readable</p>
             <ul className="space-y-3 text-sm text-slate-300">
               <li><a href="/skill.md" className="hover:text-violet-300 transition-colors font-mono font-medium">skill.md</a></li>
               <li><a href="/llms.txt" className="hover:text-violet-300 transition-colors font-mono font-medium">llms.txt</a></li>
-              <li><a href="#" className="hover:text-violet-300 transition-colors font-medium">Receipt schema</a></li>
+              <li><a href="https://github.com/ever-guild/proof-runner/blob/main/packages/schema/src/public.ts" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">Receipt schema</a></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">External</h4>
+            <p className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">External</p>
             <ul className="space-y-3 text-sm text-slate-300">
-              <li><a href="#" className="hover:text-violet-300 transition-colors font-medium">OKX.AI service</a></li>
-              <li><a href="https://github.com/ever-guild" className="hover:text-violet-300 transition-colors font-medium">GitHub</a></li>
-              <li><a href="https://ever-guild.net" className="hover:text-violet-300 transition-colors font-medium">Ever Guild</a></li>
+              <li><a href="https://github.com/ever-guild" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">GitHub</a></li>
+              <li><a href="https://ever-guild.net" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">Ever Guild</a></li>
             </ul>
           </div>
         </div>

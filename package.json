@@ -14,11 +14,12 @@
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "lint": "pnpm -r lint",
+    "lint": "eslint src .storybook vite.config.ts vitest.ui.config.ts && pnpm -r lint",
     "pretest": "pnpm --filter @ever-guild/proof-runner-schema build",
-    "test": "pnpm -r test",
+    "test": "vitest run --config vitest.ui.config.ts && pnpm run test:storybook && pnpm -r test",
+    "test:storybook": "vitest run --config vite.config.ts",
     "pretypecheck": "pnpm --filter @ever-guild/proof-runner-schema build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "tsc -p tsconfig.ui.json && pnpm -r typecheck"
   },
   "type": "module",
   "dependencies": {
@@ -38,6 +39,7 @@
     "@storybook/addon-docs": "^10.5.3",
     "@storybook/addon-mcp": "^0.7.0",
     "@storybook/addon-vitest": "^10.5.3",
+    "@storybook/react": "^10.5.3",
     "@storybook/react-vite": "^10.5.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

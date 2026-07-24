@@ -17,17 +17,17 @@ export function Header() {
           </Link>
           
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-300">
-            <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
+            <a href="/#how-it-works" className="hover:text-white transition-colors">How it works</a>
             <a href="/examples/passed" className="hover:text-white transition-colors">Example receipt</a>
-            <a href="#for-agents" className="hover:text-white transition-colors">For agents</a>
-            <a href="#security" className="hover:text-white transition-colors">Security</a>
+            <a href="/#for-agents" className="hover:text-white transition-colors">For agents</a>
+            <a href="/#security" className="hover:text-white transition-colors">Security</a>
             <a href="https://github.com/ever-guild/proof-runner" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>
           </nav>
         </div>
 
         <div>
-          <Button variant="primary" size="sm" className="hidden sm:inline-flex font-semibold">
-            Verify a repository
+          <Button asChild variant="primary" size="sm" className="hidden sm:inline-flex font-semibold">
+            <a href="/#verify">Preview verification</a>
           </Button>
         </div>
       </div>

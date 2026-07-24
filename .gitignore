@@ -7,3 +7,5 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+*.log
+storybook-static/

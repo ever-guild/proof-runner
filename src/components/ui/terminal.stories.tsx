@@ -30,7 +30,7 @@ export const Default: Story = {
       "$ proofrunner execute --skill lint",
       "> Running linter...",
       "PASS: No linting errors found.",
-      "Generating cryptographic receipt...",
+      "Demo checks complete.",
     ],
   },
 };
