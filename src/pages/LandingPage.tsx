@@ -1,19 +1,24 @@
 import * as React from "react"
 import { Lock, Bot } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "../components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card"
 import { Input } from "../components/ui/input"
 import { Badge } from "../components/ui/badge"
 import { isCanonicalGitHubRepository } from "../lib/demo"
+import { inspectRepository, startVerification, type Inspection } from "../lib/api"
 
 export function LandingPage() {
+  const navigate = useNavigate()
   const [repositoryUrl, setRepositoryUrl] = React.useState("https://github.com/ever-guild/proof-runner")
   const [gitRef, setGitRef] = React.useState("main")
-  const [inspectState, setInspectState] = React.useState<"idle" | "supported">("idle")
+  const [gitRefType, setGitRefType] = React.useState<"branch" | "tag" | "commit">("branch")
+  const [inspectState, setInspectState] = React.useState<"idle" | "loading" | "supported" | "unsupported">("idle")
+  const [inspection, setInspection] = React.useState<Inspection | null>(null)
+  const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
 
-  const handleInspect = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleInspect = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!isCanonicalGitHubRepository(repositoryUrl)) {
       setError("Use a canonical https://github.com/owner/repository URL.")
@@ -26,7 +31,33 @@ export function LandingPage() {
       return
     }
     setError("")
-    setInspectState("supported")
+    setInspection(null)
+    setInspectState("loading")
+    try {
+      const result = await inspectRepository(repositoryUrl, { type: gitRefType, value: gitRef.trim() })
+      if (!result.supported) {
+        setError(`${result.reason}: ${result.message}`)
+        setInspectState("unsupported")
+        return
+      }
+      setInspection(result.inspection)
+      setInspectState("supported")
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Inspection could not be completed.")
+      setInspectState("unsupported")
+    }
+  }
+
+  const handleVerify = async () => {
+    if (!inspection) return
+    setSubmitting(true)
+    setError("")
+    try {
+      navigate(`/runs/${(await startVerification(inspection)).id}`)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Verification could not be started.")
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -45,7 +76,7 @@ export function LandingPage() {
             ProofRunner executes an exact Git commit in an isolated environment using a pinned verification skill and returns a reproducible PASS / FAIL receipt.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Preview verification</a></Button>
+            <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Verify a repository</a></Button>
             <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View demo receipt</Link></Button>
           </div>
           <p className="mt-6 text-sm text-slate-300 font-medium">
@@ -84,7 +115,14 @@ export function LandingPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="git-ref" className="text-sm font-semibold text-slate-200">Git reference</label>
-                  <Input id="git-ref" name="gitRef" required placeholder="Branch, tag or full commit SHA" value={gitRef} onChange={(event) => setGitRef(event.target.value)} />
+                  <div className="grid grid-cols-[9rem_1fr] gap-3">
+                    <select id="git-ref-type" name="gitRefType" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      <option value="branch">Branch</option>
+                      <option value="tag">Tag</option>
+                      <option value="commit">Commit SHA</option>
+                    </select>
+                    <Input id="git-ref" name="gitRef" required placeholder={gitRefType === "commit" ? "Full commit SHA" : `Enter ${gitRefType} name`} value={gitRef} onChange={(event) => setGitRef(event.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="verification-profile" className="text-sm font-semibold text-slate-200">Verification profile</label>
@@ -92,43 +130,44 @@ export function LandingPage() {
                 </div>
               </div>
 
-              {inspectState === "idle" && (
+              {(inspectState === "idle" || inspectState === "unsupported") && (
                 <Button type="submit" variant="primary" className="w-full font-semibold">
-                  Preview inspection
+                  Inspect repository
                 </Button>
               )}
 
-              {inspectState === "supported" && (
+              {inspectState === "loading" && <Button type="button" disabled variant="primary" className="w-full font-semibold">Inspecting immutable commit…</Button>}
+
+              {inspectState === "supported" && inspection && (
                 <div className="space-y-6 animate-fade-in-up">
                   <div className="p-4 rounded-xl bg-white/10 border border-white/20 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-white">Demo inspection preview</span>
-                      <Badge variant="queued">DEMO DATA</Badge>
+                      <span className="text-sm font-semibold text-white">Repository inspection</span>
+                      <Badge variant="queued">SUPPORTED</Badge>
                     </div>
-                    <p className="text-xs text-slate-400 break-all">{repositoryUrl} · {gitRef}</p>
+                    <p className="text-xs text-slate-400 break-all">{inspection.repositoryUrl} · {inspection.resolvedCommitSha}</p>
                     <div className="grid grid-cols-2 gap-4 text-sm mt-4">
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Stack</p>
-                        <p className="text-slate-200 font-mono text-xs">Node.js 22, pnpm, Vitest</p>
+                        <p className="text-slate-200 font-mono text-xs">{inspection.hasTypeScript ? "TypeScript" : "JavaScript"}, {inspection.packageManager}, Node {inspection.nodeVersion ?? "unspecified"}</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Skill</p>
-                        <p className="text-slate-200 font-mono text-xs">node-typescript@1</p>
+                        <p className="text-slate-200 font-mono text-xs">{inspection.selectedSkill}</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Duration</p>
-                        <p className="text-slate-200 font-mono text-xs">Not measured</p>
+                        <p className="text-slate-200 font-mono text-xs">Measured after verification</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1 text-xs uppercase tracking-wider font-semibold">Price</p>
-                        <p className="text-slate-200 font-mono text-xs">Free launch fallback</p>
+                        <p className="text-slate-200 font-mono text-xs">Free launch mode</p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button asChild variant="primary" className="flex-1 font-semibold"><Link to="/runs/demo-123">Run passing demo</Link></Button>
-                    <Button asChild variant="secondary" className="flex-1 font-semibold text-slate-200"><Link to="/runs/fail-demo">Run broken demo</Link></Button>
-                  </div>
+                  <Button type="button" disabled={submitting} onClick={() => void handleVerify()} variant="primary" className="w-full font-semibold">
+                    {submitting ? "Starting verification…" : "Verify this immutable commit"}
+                  </Button>
                 </div>
               )}
               </form>

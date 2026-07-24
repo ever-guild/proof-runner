@@ -6,6 +6,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api ./apps/api
 COPY packages/schema ./packages/schema
 COPY packages/receipt ./packages/receipt
+COPY skills/node-typescript ./skills/node-typescript
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ever-guild/proof-runner-api... build
 
