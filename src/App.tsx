@@ -34,6 +34,11 @@ function App() {
           {/* Aliases for the demo links */}
           <Route path="/examples/passed" element={<ReceiptPage />} />
           <Route path="/examples/broken" element={<ReceiptPage />} />
+          <Route path="/examples/timeout" element={<ReceiptPage />} />
+          <Route path="/examples/system-error" element={<ReceiptPage />} />
+          <Route path="/examples/inconclusive" element={<ReceiptPage />} />
+          <Route path="/examples/:id/run" element={<RunPage />} />
+
         </Routes>
       </AppLayout>
     </BrowserRouter>

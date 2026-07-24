@@ -195,18 +195,28 @@ function DemoRunPage() {
   }
 
   const steps = [
-    ...receipt.checks.map((check, index) => ({
-      name: check.name,
-      status:
-        completedSteps > index
-          ? check.outcome === "FAILED" ? "FAIL" : "PASS"
-          : completedSteps === index ? "RUNNING" : "WAITING",
-    })),
+    ...receipt.checks.map((check, index) => {
+      let status = "WAITING"
+      if (completedSteps > index) {
+        status = check.outcome === "FAILED" ? "FAIL"
+          : check.outcome === "TIMEOUT" ? "TIMEOUT"
+            : check.outcome === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+              : check.outcome === "INCONCLUSIVE" ? "INCONCLUSIVE"
+                : "PASS"
+      } else if (completedSteps === index) {
+        status = "RUNNING"
+      }
+      return { name: check.name, status }
+    }),
     {
       name: "Demo receipt generated",
       status:
         completedSteps > receipt.checks.length
-          ? "PASS"
+          ? receipt.verdict === "FAIL" ? "FAIL"
+            : receipt.verdict === "TIMEOUT" ? "TIMEOUT"
+              : receipt.verdict === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+                : receipt.verdict === "INCONCLUSIVE" ? "INCONCLUSIVE"
+                  : "PASS"
           : completedSteps === receipt.checks.length ? "RUNNING" : "WAITING",
     },
   ]
@@ -219,15 +229,44 @@ function DemoRunPage() {
         "FAIL: Unit tests",
         "Demo execution complete",
       ]
-    : [
-        "> Demo sandbox initialized",
-        "> Demo build completed",
-        "> Demo test suite: 5 passed",
-        "PASS: All configured checks passed",
-        "Demo execution complete",
-      ]
+    : kind === "timeout"
+      ? [
+          "> Demo sandbox initialized",
+          "> Demo build running...",
+          "TIMEOUT: Execution timed out at 45s",
+          "Demo execution aborted",
+        ]
+      : kind === "system-error"
+        ? [
+            "> Demo sandbox initializing...",
+            "SYSTEM_ERROR: Docker daemon unexpected exit",
+            "Demo execution failed",
+          ]
+        : kind === "inconclusive"
+          ? [
+              "> Demo sandbox initialized",
+              "> Demo build completed",
+              "INCONCLUSIVE: Coverage below confidence threshold",
+              "Demo execution complete",
+            ]
+          : [
+              "> Demo sandbox initialized",
+              "> Demo build completed",
+              "> Demo test suite: 5 passed",
+              "PASS: All configured checks passed",
+              "Demo execution complete",
+            ]
 
   const tagLabel = kind === "broken" ? "demo-broken" : "demo-fixed"
+
+  const verdict = receipt.verdict
+  const alertStyle = verdict === "FAIL"
+    ? { border: "border-fail/40 bg-fail/10", title: "text-fail font-bold", icon: <XCircle className="w-4 h-4 text-fail" /> }
+    : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE"
+      ? { border: "border-amber-500/40 bg-amber-500/10", title: "text-amber-300 font-bold", icon: <AlertTriangle className="w-4 h-4 text-amber-300" /> }
+      : verdict === "SYSTEM_ERROR"
+        ? { border: "border-rose-500/40 bg-rose-500/10", title: "text-rose-300 font-bold", icon: <AlertOctagon className="w-4 h-4 text-rose-300" /> }
+        : { border: "border-pass/40 bg-pass/10", title: "text-pass font-bold", icon: <CircleCheck className="w-4 h-4 text-pass" /> }
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
@@ -260,11 +299,15 @@ function DemoRunPage() {
                       step.status === "FAIL" ? "text-fail flex items-center gap-1"
                         : step.status === "PASS" ? "text-pass flex items-center gap-1"
                           : step.status === "RUNNING" ? "text-running animate-pulse flex items-center gap-1"
-                            : "text-slate-600"
+                            : step.status === "TIMEOUT" || step.status === "INCONCLUSIVE" ? "text-amber-300 flex items-center gap-1"
+                              : step.status === "SYSTEM_ERROR" ? "text-rose-300 flex items-center gap-1"
+                                : "text-slate-600"
                     }>
                       {step.status === "PASS" && <CircleCheck className="w-3.5 h-3.5" />}
                       {step.status === "FAIL" && <XCircle className="w-3.5 h-3.5" />}
                       {step.status === "RUNNING" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {(step.status === "TIMEOUT" || step.status === "INCONCLUSIVE") && <AlertTriangle className="w-3.5 h-3.5" />}
+                      {step.status === "SYSTEM_ERROR" && <AlertOctagon className="w-3.5 h-3.5" />}
                       {step.status}
                     </span>
                   </div>
@@ -274,9 +317,9 @@ function DemoRunPage() {
           </Card>
 
           {isComplete && (
-            <Alert variant={kind === "broken" ? "destructive" : "default"} className={`animate-fade-in-up border ${kind === "broken" ? "border-fail/40 bg-fail/10" : "border-pass/40 bg-pass/10"}`}>
-              {kind === "broken" ? <XCircle className="w-4 h-4 text-fail" /> : <CircleCheck className="w-4 h-4 text-pass" />}
-              <AlertTitle className={kind === "broken" ? "text-fail font-bold" : "text-pass font-bold"}>
+            <Alert variant={verdict === "FAIL" ? "destructive" : "default"} className={`animate-fade-in-up border ${alertStyle.border}`}>
+              {alertStyle.icon}
+              <AlertTitle className={alertStyle.title}>
                 Demo verdict: {receipt.verdict}
               </AlertTitle>
               <AlertDescription className="text-slate-300">{receipt.summary}</AlertDescription>
@@ -311,4 +354,3 @@ function DemoRunPage() {
     </div>
   )
 }
-

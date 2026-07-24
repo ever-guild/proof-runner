@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
-import { Check, Copy, Download, XCircle } from "lucide-react"
+import { AlertOctagon, AlertTriangle, Check, Clock, Copy, Download, XCircle } from "lucide-react"
 
 import { Card, CardContent, CardHeader } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
@@ -17,19 +17,35 @@ export function ReceiptPage() {
 
 function updateOpenGraphMeta(title: string, description: string, url: string) {
   document.title = title
-  const setMeta = (property: string, content: string) => {
-    let element = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null
+  const setMeta = (attr: "property" | "name", key: string, content: string) => {
+    let element = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null
     if (!element) {
       element = document.createElement("meta")
-      element.setAttribute("property", property)
+      element.setAttribute(attr, key)
       document.head.appendChild(element)
     }
     element.content = content
   }
-  setMeta("og:title", title)
-  setMeta("og:description", description)
-  setMeta("og:url", url)
-  setMeta("og:type", "website")
+  setMeta("property", "og:title", title)
+  setMeta("property", "og:description", description)
+  setMeta("property", "og:url", url)
+  setMeta("property", "og:type", "website")
+  setMeta("name", "twitter:card", "summary_large_image")
+  setMeta("name", "twitter:title", title)
+  setMeta("name", "twitter:description", description)
+}
+
+export function extractReceiptVerdict(data: unknown): string {
+  if (!data || typeof data !== "object") return "INCONCLUSIVE"
+  const obj = data as Record<string, unknown>
+  const payload = obj.payload as Record<string, unknown> | undefined
+  const payloadReport = payload?.report as Record<string, unknown> | undefined
+  const report = obj.report as Record<string, unknown> | undefined
+
+  if (typeof payloadReport?.verdict === "string") return payloadReport.verdict
+  if (typeof report?.verdict === "string") return report.verdict
+  if (typeof obj.verdict === "string") return obj.verdict
+  return "INCONCLUSIVE"
 }
 
 function LiveReceiptPage({ id }: { id: string | undefined }) {
@@ -41,15 +57,11 @@ function LiveReceiptPage({ id }: { id: string | undefined }) {
     if (!id) return
     void getReceipt(id).then((data) => {
       setReceipt(data)
-      const receiptObj = data as { verdict?: string; report?: { verdict?: string } }
-      const verdict = receiptObj.report?.verdict ?? receiptObj.verdict
-      const isPass = verdict === "PASS"
-      const isFail = verdict === "FAIL"
-      const title = `Verification Receipt ${id} · ${isPass ? "PASS" : isFail ? "FAIL" : "INCONCLUSIVE"} · ProofRunner`
-      const desc = `Signed verification evidence receipt for run ${id}.`
+      const verdict = extractReceiptVerdict(data)
+      const title = `Verification Receipt ${id} · ${verdict} · ProofRunner`
+      const desc = `Signed verification evidence receipt for run ${id} with verdict ${verdict}.`
       updateOpenGraphMeta(title, desc, window.location.href)
     }).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Receipt could not be loaded."))
-
   }, [id])
 
   const copyUrl = async () => {
@@ -103,16 +115,25 @@ function DemoReceiptPage() {
   const location = useLocation()
   const kind = getDemoKind(id, location.pathname)
   const receipt = demoReceipts[kind]
-  const isFail = receipt.verdict === "FAIL"
-  const isPass = receipt.verdict === "PASS"
   const [copyLabel, setCopyLabel] = React.useState("Copy demo URL")
   const tagLabel = kind === "broken" ? "demo-broken" : "demo-fixed"
 
+  const badgeVariantMap: Record<string, "pass" | "fail" | "timeout" | "system_error" | "inconclusive"> = {
+    PASS: "pass",
+    FAIL: "fail",
+    TIMEOUT: "timeout",
+    SYSTEM_ERROR: "system_error",
+    INCONCLUSIVE: "inconclusive",
+  }
+
+  const verdict = receipt.verdict
+  const badgeVariant = badgeVariantMap[verdict] ?? "inconclusive"
+
   React.useEffect(() => {
-    const title = `${receipt.verdict} Demo Receipt (${tagLabel}) · ProofRunner`
+    const title = `${verdict} Demo Receipt (${tagLabel}) · ProofRunner`
     const desc = `Demo verification evidence receipt for ${receipt.repository} at tag ${tagLabel}.`
     updateOpenGraphMeta(title, desc, window.location.href)
-  }, [receipt.verdict, receipt.repository, tagLabel])
+  }, [verdict, receipt.repository, tagLabel])
 
   const copyUrl = async () => {
     await navigator.clipboard.writeText(window.location.href)
@@ -137,19 +158,33 @@ function DemoReceiptPage() {
           Demonstration data — not a signed production receipt
         </p>
         <h1 className="text-3xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-          {isFail ? <XCircle className="w-8 h-8 text-fail" /> : <Check className="w-8 h-8 text-pass" />}
-          Demo verification {isFail ? "failed" : "passed"}
+          {verdict === "FAIL" && <XCircle className="w-8 h-8 text-fail" />}
+          {verdict === "TIMEOUT" && <Clock className="w-8 h-8 text-amber-400" />}
+          {verdict === "SYSTEM_ERROR" && <AlertOctagon className="w-8 h-8 text-rose-400" />}
+          {verdict === "INCONCLUSIVE" && <AlertTriangle className="w-8 h-8 text-amber-400" />}
+          {verdict === "PASS" && <Check className="w-8 h-8 text-pass" />}
+          Demo verification {verdict.toLowerCase()}
         </h1>
         <p className="text-slate-400 max-w-xl mx-auto">{receipt.summary}</p>
       </div>
 
-      <Card className={`relative overflow-hidden mb-8 border ${isFail ? "border-fail/30" : "border-pass/30"}`}>
-        <div className={`absolute -top-24 -right-24 w-64 h-64 blur-[100px] rounded-full pointer-events-none ${isFail ? "bg-fail/20" : "bg-pass/20"}`} />
+      <Card className={`relative overflow-hidden mb-8 border ${
+        verdict === "FAIL" ? "border-fail/30"
+          : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE" ? "border-amber-500/30"
+            : verdict === "SYSTEM_ERROR" ? "border-rose-500/30"
+              : "border-pass/30"
+      }`}>
+        <div className={`absolute -top-24 -right-24 w-64 h-64 blur-[100px] rounded-full pointer-events-none ${
+          verdict === "FAIL" ? "bg-fail/20"
+            : verdict === "TIMEOUT" || verdict === "INCONCLUSIVE" ? "bg-amber-500/20"
+              : verdict === "SYSTEM_ERROR" ? "bg-rose-500/20"
+                : "bg-pass/20"
+        }`} />
         <CardHeader className="border-b border-white/5 bg-black/20">
           <div className="flex items-center justify-between">
             <h2 className="tracking-wider uppercase text-sm font-semibold text-slate-400">Demo receipt</h2>
-            <Badge variant={isFail ? "fail" : isPass ? "pass" : "inconclusive"}>
-              {receipt.verdict}
+            <Badge variant={badgeVariant}>
+              {verdict}
             </Badge>
           </div>
         </CardHeader>
@@ -181,4 +216,3 @@ function DemoReceiptPage() {
     </div>
   )
 }
-
