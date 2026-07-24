@@ -1,17 +1,21 @@
 {
-  "name": "@ever-guild/proof-runner-api",
-  "version": "0.0.0",
+  "name": "@ever-guild/proof-runner-receipt",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src test",
     "test": "vitest run --config ../../vitest.packages.config.ts",
-    "pretypecheck": "pnpm --filter @ever-guild/proof-runner-receipt build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ever-guild/proof-runner-receipt": "workspace:*",
     "@ever-guild/proof-runner-schema": "workspace:*"
   },
   "devDependencies": {
