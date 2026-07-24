@@ -46,7 +46,7 @@ const json = async <T>(response: Response): Promise<T> => {
   try {
     body = text ? (JSON.parse(text) as T & { error?: { message?: string } }) : null
   } catch {
-    throw new Error(`Invalid response from server (HTTP ${response.status}). Make sure the API server is running at http://127.0.0.1:8787.`)
+    throw new Error(`Invalid response from server (HTTP ${response.status}).`)
   }
   if (!response.ok || !body) {
     throw new Error(body?.error?.message ?? `Request failed with HTTP ${response.status}`)
