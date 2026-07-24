@@ -199,10 +199,11 @@ const apiDemoReceipts: Record<string, { verdict: string; status: string; gitTag:
                 : receiptId === "inconclusive" || url.pathname.includes("/inconclusive") ? "inconclusive"
                   : receiptId === "broken" || url.pathname.endsWith("/broken") ? "broken"
                     : "passed";
-            const demo = apiDemoReceipts[kind] ?? apiDemoReceipts.passed;
+            const demo = apiDemoReceipts[kind] ?? apiDemoReceipts["passed"]!;
             const displayVerdict = demo.status === "TIMEOUT" ? "TIMEOUT" : demo.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR" : demo.verdict;
             const title = `[DEMO] ${displayVerdict} Verification Receipt (${demo.gitTag}) · ProofRunner`;
             const description = `Demo verification evidence for ${demo.repository} at tag ${demo.gitTag}: ${demo.summary}`;
+
             const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
             response.writeHead(200, {
               "cache-control": "public, max-age=60",
