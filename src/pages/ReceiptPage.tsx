@@ -41,12 +41,15 @@ function LiveReceiptPage({ id }: { id: string | undefined }) {
     if (!id) return
     void getReceipt(id).then((data) => {
       setReceipt(data)
-      const isPass = (data as { verdict?: string }).verdict === "PASS"
-      const isFail = (data as { verdict?: string }).verdict === "FAIL"
+      const receiptObj = data as { verdict?: string; report?: { verdict?: string } }
+      const verdict = receiptObj.report?.verdict ?? receiptObj.verdict
+      const isPass = verdict === "PASS"
+      const isFail = verdict === "FAIL"
       const title = `Verification Receipt ${id} · ${isPass ? "PASS" : isFail ? "FAIL" : "INCONCLUSIVE"} · ProofRunner`
       const desc = `Signed verification evidence receipt for run ${id}.`
       updateOpenGraphMeta(title, desc, window.location.href)
     }).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Receipt could not be loaded."))
+
   }, [id])
 
   const copyUrl = async () => {
