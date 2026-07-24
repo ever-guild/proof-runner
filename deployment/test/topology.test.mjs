@@ -234,6 +234,10 @@ test("Compose uses the API runtime bind names and passes every explicit runner p
   ]) {
     assert.match(runner, new RegExp(`^      ${name}:`, "m"));
   }
+  assert.match(
+    runner,
+    /PROOF_RUNNER_RUNTIME_IMAGE: \$\{PROOF_RUNNER_RUNTIME_IMAGE:\?pin the runtime image by sha256 digest\}/,
+  );
 });
 
 test("runner image carries the pinned skill and host-daemon-visible asset volume", async () => {

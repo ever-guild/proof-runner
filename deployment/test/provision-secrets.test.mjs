@@ -40,6 +40,9 @@ const createProductionEnv = () => {
   const source = readFileSync(envFile, "utf8").replace(
     'PROOF_RUNNER_DOMAIN=""',
     'PROOF_RUNNER_DOMAIN="runner.everguild.dev"',
+  ).replace(
+    'PROOF_RUNNER_RUNTIME_IMAGE=""',
+    `PROOF_RUNNER_RUNTIME_IMAGE="sha256:${"a".repeat(64)}"`,
   );
   writeFileSync(envFile, source, { mode: 0o600 });
   chmodSync(envFile, 0o600);
@@ -125,6 +128,7 @@ test("init creates exclusive files with safe modes, a 48-byte token, and matchin
   assert.equal(environment.PROOF_RUNNER_VERIFY_PRICE, "$0.01");
   assert.equal(environment.PROOF_RUNNER_EXECUTION_MS, "180000");
   assert.equal(environment.PROOF_RUNNER_MEMORY_BYTES, "536870912");
+  assert.match(environment.PROOF_RUNNER_RUNTIME_IMAGE, /^sha256:[a-f0-9]{64}$/);
   assert.match(environment.PROOF_RUNNER_PROXY_IMAGE, /@sha256:[a-f0-9]{64}$/);
   assert.throws(
     () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-2" }),
@@ -407,6 +411,21 @@ test("validation rejects an incomplete legacy production schema", () => {
 test("runner policy rejects unsafe images, excessive timeout, and undersized disk", () => {
   const { envFile } = createProductionEnv();
   const values = parseDotenv(readFileSync(envFile, "utf8"));
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_RUNTIME_IMAGE: "" }),
+    /PROOF_RUNNER_RUNTIME_IMAGE is required/,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_RUNTIME_IMAGE: "proof-runner-node:1" }),
+    /pinned by sha256 image ID or repository digest/,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
+  );
   assert.throws(
     () => validateConfiguration({ ...values, PROOF_RUNNER_PROXY_IMAGE: "ubuntu/squid:latest" }),
     /pinned by sha256 digest/,

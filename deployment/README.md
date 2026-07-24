@@ -61,8 +61,9 @@ the non-secret public receipt key beside it with mode `0644`. It never prints
 secret values and refuses to overwrite either file. It generates only the
 ProofRunner runner token and receipt keypair; it deliberately leaves external
 OKX credentials and the receiving address empty. Set `PROOF_RUNNER_DOMAIN`,
-choose free or paid mode, and review the backup, image, and runner-policy
-settings. Validate the complete file without changing GitHub:
+choose free or paid mode, pin `PROOF_RUNNER_RUNTIME_IMAGE` as described below,
+and review the backup and runner-policy settings. Validate the complete file
+without changing GitHub:
 
 ```sh
 pnpm secrets apply \
@@ -121,6 +122,7 @@ runner starts:
 ```sh
 docker build --tag proof-runner-node:1 \
   --file apps/runner/docker/Dockerfile apps/runner/docker
+docker image inspect --format '{{.Id}}' proof-runner-node:1
 docker compose --env-file deployment/.env.production -f deployment/compose.yaml up -d --build
 ```
 
@@ -128,6 +130,10 @@ Compose also derives the web image's canonical `PUBLIC_BASE_URL` build argument
 from `PROOF_RUNNER_DOMAIN`. The web image build fails when that public HTTPS
 origin is missing or invalid, so the shipped `index.html`, `robots.txt`, and
 `sitemap.xml` cannot silently omit deployment metadata.
+Copy the inspected `sha256:<64 hex>` image ID into
+`PROOF_RUNNER_RUNTIME_IMAGE` before `apply` or Compose startup. A registry
+deployment may instead use `repository@sha256:<64 hex>`. Mutable tags, including
+`proof-runner-node:1`, are rejected by the production validator.
 
 The runner image supplies its immutable skill and sandbox configuration through
 a read-only Docker volume shared with its disposable sibling containers. This
