@@ -152,8 +152,9 @@ function DemoReceiptPage() {
   }
 
   const downloadJson = () => {
-    const payload = JSON.stringify({ demo: true, gitTag: tagLabel, ...receipt }, null, 2)
+    const payload = JSON.stringify({ demo: true, ...receipt }, null, 2)
     const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }))
+
     const anchor = document.createElement("a")
     anchor.href = url
     anchor.download = `proofrunner-demo-${kind}-${tagLabel}.json`

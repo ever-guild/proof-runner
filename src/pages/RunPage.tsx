@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
-import { demoReceipts, getDemoKind } from "../lib/demo"
+import { demoReceipts, getDemoKind, isNonFailStatus } from "../lib/demo"
+
 import { getRun, type Run } from "../lib/api"
 
 const STEP_DELAY_MS = 500
