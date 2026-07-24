@@ -393,6 +393,7 @@ test("apply preflights, creates the requested Environment, and sends every value
     assert.ok(!call.args.includes(expected[name]));
   }
   assert.equal(result.applied.length, 9);
+  assert.equal(result.environment, "production-eu");
 });
 
 test("apply preserves an existing Environment and its protections", () => {
@@ -401,11 +402,11 @@ test("apply preserves an existing Environment and its protections", () => {
   const runCommand = (command, args, options = {}) => {
     calls.push({ command, args, input: options.input });
     if (args[0] === "api" && args.includes("--paginate")) {
-      return { status: 0, stdout: "production-eu\nproduction\n" };
+      return { status: 0, stdout: "Production-EU\nproduction\n" };
     }
     return { status: 0, stdout: "" };
   };
-  applyConfiguration({
+  const result = applyConfiguration({
     repo: "ever-guild/proof-runner",
     environment: "production-eu",
     inputFile: envFile,
@@ -413,6 +414,10 @@ test("apply preserves an existing Environment and its protections", () => {
   });
   assert.ok(calls.some(({ args }) => args.includes("--paginate")));
   assert.equal(calls.some(({ args }) => args[0] === "api" && args.includes("PUT")), false);
+  assert.equal(result.environment, "Production-EU");
+  for (const { args } of calls.filter(({ args }) => args[0] === "secret" || args[0] === "variable")) {
+    assert.equal(args.at(-1), "Production-EU");
+  }
 });
 
 test("failed Environment listing stops before any remote mutation", () => {

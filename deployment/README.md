@@ -59,7 +59,9 @@ pnpm secrets apply \
 `apply` validates file permissions, every value, and the receipt key pair
 before it invokes `gh`. It lists the requested GitHub Environments without
 mutation; an existing Environment (including its protection rules) is left
-unchanged, and a new one is created only when the exact target name is absent.
+unchanged, and a new one is created only when no case-insensitive match for the
+target name is present. Existing GitHub casing is reused for every subsequent
+secret and variable update.
 It sends secret values to `gh secret set` over stdin.
 The secret allowlist is `PROOF_RUNNER_BEARER_TOKEN` and
 `PROOF_RUNNER_RECEIPT_PRIVATE_KEY`. Domain, receipt key ID and verification

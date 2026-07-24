@@ -438,10 +438,11 @@ export const applyConfiguration = ({
   if (!commandSucceeded(environments)) {
     fail(`Failed to list GitHub Environments for ${repo}`);
   }
-  const environmentExists = (environments.stdout ?? "")
+  const existingEnvironment = (environments.stdout ?? "")
     .split(/\r?\n/)
-    .some((name) => name === environment);
-  if (!environmentExists && !commandSucceeded(runCommand("gh", [
+    .find((name) => name.toLowerCase() === environment.toLowerCase());
+  const targetEnvironment = existingEnvironment || environment;
+  if (!existingEnvironment && !commandSucceeded(runCommand("gh", [
     "api",
     "--method",
     "PUT",
@@ -459,7 +460,7 @@ export const applyConfiguration = ({
       "--repo",
       repo,
       "--env",
-      environment,
+      targetEnvironment,
     ], { input: values[name] });
     if (!commandSucceeded(result)) {
       const completed = applied.length ? applied.join(", ") : "none";
@@ -479,7 +480,7 @@ export const applyConfiguration = ({
     ["variable", "PROOF_RUNNER_RUNTIME_IMAGE"],
   ];
   for (const [kind, name] of applyPlan) setValue(kind, name);
-  return { repo, environment, dryRun: false, applied, ...names };
+  return { repo, environment: targetEnvironment, dryRun: false, applied, ...names };
 };
 
 const isDirectEntry = () => (
