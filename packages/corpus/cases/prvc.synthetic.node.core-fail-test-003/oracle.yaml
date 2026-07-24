@@ -1,0 +1,11 @@
+case_id: prvc.synthetic.node.core-fail-test-003
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: TEST_FAILURE
+      terminal_status: COMPLETED
+      tests:
+        failing_exact:
+          - test/auth.test.js::Auth::rejects invalid token
+      verdict: FAIL

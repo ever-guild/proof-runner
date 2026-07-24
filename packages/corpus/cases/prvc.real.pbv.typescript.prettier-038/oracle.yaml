@@ -1,0 +1,20 @@
+case_id: prvc.real.pbv.typescript.prettier-038
+relations:
+  - from: buggy
+    to: fixed
+    type: fail-to-pass
+schema_version: prvc.oracle/v1
+variants:
+  buggy:
+    expected:
+      reason_code: TEST_FAILURE
+      terminal_status: COMPLETED
+      tests:
+        failing_exact:
+          - tests/format.test.ts::Prettier::formats satisfies operator
+      verdict: FAIL
+  fixed:
+    expected:
+      reason_code: NONE
+      terminal_status: COMPLETED
+      verdict: PASS

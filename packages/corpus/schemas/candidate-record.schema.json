@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ever-guild.net/prvc/research/candidate-record.schema.json",
+  "title": "PRVC Research Candidate Record v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "title",
+    "source",
+    "subject",
+    "materialization",
+    "variants",
+    "oracle",
+    "reproducibility",
+    "licenses",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": { "const": "prvc.candidate/v2" },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^candidate\\.[a-z0-9][a-z0-9._-]+$"
+    },
+    "proposed_case_id": {
+      "type": "string",
+      "pattern": "^prvc\\.[a-z0-9][a-z0-9.-]+$"
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "swe-polybench-verified",
+            "bugsjs",
+            "multi-swe-bench",
+            "gitbug-actions",
+            "manual-mining",
+            "synthetic",
+            "imported-unverified"
+          ]
+        },
+        "dataset_repository_url": { "type": "string", "format": "uri" },
+        "dataset_revision_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "dataset_artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "upstream_instance_id": { "type": "string" },
+        "upstream_repository_url": { "type": "string", "format": "uri" },
+        "issue_url": { "type": "string", "format": "uri" },
+        "pull_request_url": { "type": "string", "format": "uri" },
+        "imported_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "runtime_family", "package_manager", "project_layout"],
+      "properties": {
+        "language": { "enum": ["javascript", "typescript"] },
+        "runtime_family": { "enum": ["node", "bun", "deno"] },
+        "runtime_version": { "type": "string" },
+        "package_manager": {
+          "enum": ["npm", "pnpm", "yarn-classic", "yarn-berry", "bun", "deno", "none"]
+        },
+        "package_manager_version": { "type": "string" },
+        "project_layout": {
+          "enum": ["single-package", "workspace", "nx", "turborepo", "other"]
+        },
+        "test_frameworks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "architecture", "container_image_digest", "network_policy"],
+      "properties": {
+        "mode": { "enum": ["git-bundle", "remote-git", "recipe-only", "generated"] },
+        "git_bundle_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "architecture": { "enum": ["linux/amd64", "linux/arm64"] },
+        "container_image_digest": {
+          "type": "string",
+          "pattern": "^.+@sha256:[a-f0-9]{64}$"
+        },
+        "dockerfile_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "lockfile_name": { "type": "string" },
+        "lockfile_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "network_policy": { "enum": ["disabled", "allowlisted", "required"] },
+        "required_services": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "install_command": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "build_command": { "type": "array", "items": { "type": "string" } },
+        "test_command": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buggy", "fixed"],
+      "properties": {
+        "buggy": { "$ref": "#/$defs/variant" },
+        "fixed": { "$ref": "#/$defs/variant" }
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buggy_verdict", "fixed_verdict", "failing_tests_exact"],
+      "properties": {
+        "buggy_verdict": { "enum": ["FAIL", "INCONCLUSIVE"] },
+        "buggy_reason_code": { "type": "string" },
+        "fixed_verdict": { "const": "PASS" },
+        "failing_tests_exact": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "required_passing_tests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "unexpected_failing_tests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 0
+        }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "buggy_runs", "fixed_runs", "hosts"],
+      "properties": {
+        "level": { "enum": ["CANDIDATE", "REPRODUCED", "STABLE", "PORTABLE", "QUARANTINED"] },
+        "buggy_runs": { "$ref": "#/$defs/runSummary" },
+        "fixed_runs": { "$ref": "#/$defs/runSummary" },
+        "hosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "evidence_path": { "type": "string" },
+        "verified_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "licenses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset", "upstream", "redistribution"],
+      "properties": {
+        "dataset": { "type": "string", "minLength": 1 },
+        "upstream": { "type": "string", "minLength": 1 },
+        "upstream_evidence_path": { "type": "string" },
+        "redistribution": { "enum": ["redistributable", "recipe-only", "metadata-only", "blocked"] }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_codes"],
+      "properties": {
+        "status": { "enum": ["accepted", "quarantined", "rejected", "pending"] },
+        "reason_codes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "kind": {
+                "enum": ["swe-polybench-verified", "bugsjs", "multi-swe-bench", "gitbug-actions", "manual-mining"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "dataset_repository_url",
+              "dataset_revision_sha",
+              "upstream_instance_id",
+              "upstream_repository_url"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["patches"],
+      "properties": {
+        "base_commit_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "source_commit_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "result_tree_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "patches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "sha256", "applied_strictly"],
+            "properties": {
+              "role": { "enum": ["test", "fix", "environment", "adapter"] },
+              "path": { "type": "string" },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "applied_strictly": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "runSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempts", "expected_outcomes", "unexpected_outcomes", "pass_rate"],
+      "properties": {
+        "attempts": { "type": "integer", "minimum": 0 },
+        "expected_outcomes": { "type": "integer", "minimum": 0 },
+        "unexpected_outcomes": { "type": "integer", "minimum": 0 },
+        "pass_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exact_failure_set_stable": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+case_id: prvc.real.pbv.typescript.jest-048
+description: PRVC validation case prvc.real.pbv.typescript.jest-048
+execution_profile:
+  limits:
+    cpu_time_seconds: 90
+    memory_bytes: 2147483648
+    pids: 128
+    wall_time_seconds: 120
+  profile_id: node-typescript/v1
+  runtime:
+    architecture: linux/amd64
+    image: >-
+      node:22-alpine@sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+integrity:
+  case_hash_algorithm: sha256
+  case_hash_canonicalization: RFC8785
+  sha256: 31e926009ee531b5b90282720725edfc7723c7d7fceb11348e4d1a44be372f9c
+licenses:
+  dataset:
+    expression: unverified
+oracle_ref: oracle.yaml
+schema_version: prvc.case/v1
+source:
+  kind: imported-unverified
+subject:
+  language: typescript
+  package_manager: pnpm
+  project_type: node
+suite:
+  - smoke
+  - real-jsts
+title: Imported TypeScript candidate 048 (source evidence pending)
+variants:
+  buggy:
+    request:
+      verification_skill:
+        digest: >-
+          sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+        name: node-typescript
+        version: 1.0.0
+  fixed:
+    request:
+      verification_skill:
+        digest: >-
+          sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+        name: node-typescript
+        version: 1.0.0
+visibility: public

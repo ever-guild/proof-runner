@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.sandbox-host-file-018
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: SANDBOX_FAILURE
+      terminal_status: POLICY_BLOCKED
+      verdict: INCONCLUSIVE

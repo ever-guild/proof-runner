@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.receipt-tamper-skill-027
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: RECEIPT_HASH_MISMATCH
+      terminal_status: COMPLETED
+      verdict: INCONCLUSIVE

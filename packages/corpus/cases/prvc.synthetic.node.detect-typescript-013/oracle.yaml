@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.node.detect-typescript-013
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: NONE
+      terminal_status: COMPLETED
+      verdict: PASS

@@ -1,0 +1,41 @@
+case_id: prvc.synthetic.node.receipt-tamper-timestamp-031
+description: PRVC validation case prvc.synthetic.node.receipt-tamper-timestamp-031
+execution_profile:
+  limits:
+    cpu_time_seconds: 90
+    memory_bytes: 2147483648
+    pids: 128
+    wall_time_seconds: 120
+  profile_id: node-npm/v1
+  runtime:
+    architecture: linux/amd64
+    image: >-
+      node:22-alpine@sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+integrity:
+  case_hash_algorithm: sha256
+  case_hash_canonicalization: RFC8785
+  sha256: f2413c4a9efe20f3926967eabb07563e331f78c2ad1467d61abc5a589269779a
+licenses:
+  dataset:
+    expression: generated fixture
+oracle_ref: oracle.yaml
+schema_version: prvc.case/v1
+source:
+  kind: synthetic
+subject:
+  language: javascript
+  package_manager: npm
+  project_type: node
+suite:
+  - smoke
+  - protocol
+title: Tampered receipt timestamp
+variants:
+  default:
+    request:
+      verification_skill:
+        digest: >-
+          sha256:e13460e6e73f8a49c933c0e159045b85a374826b1b590e88383f98018d45be31
+        name: node-typescript
+        version: 1.0.0
+visibility: public
