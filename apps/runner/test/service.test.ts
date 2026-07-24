@@ -10,6 +10,7 @@ const config: RunnerConfig = {
   host: "127.0.0.1",
   port: 8788,
   bearerToken: "a".repeat(32),
+  apiCallbackUrl: "http://127.0.0.1:9999",
   leaseExtensionMs: 30_000,
   runtimeImage: "unused",
   proxyImage: "unused",
@@ -158,5 +159,17 @@ describe("versioned leased runner service", () => {
     );
     cleanupFinished?.();
     await vi.waitFor(() => expect(() => service.dispatch(dispatch())).not.toThrow());
+  });
+
+  it("returns terminal results to the authenticated API callback client", async () => {
+    const callback = { heartbeat: vi.fn(async () => new Date(Date.now() + 60_000).toISOString()), result: vi.fn(async () => undefined) };
+    const service = new RunnerService(config, { execute: async () => ({
+      status: "SYSTEM_ERROR", report: null,
+      systemError: { code: "RUNNER_FAILURE", message: "internal detail", retryable: true },
+    }) }, callback);
+    const job = dispatch();
+    service.dispatch(job);
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledOnce());
+    expect(callback.result).toHaveBeenCalledWith(job.runId, expect.objectContaining({ status: "SYSTEM_ERROR", leaseId: job.lease.leaseId }));
   });
 });

@@ -26,10 +26,18 @@ export class ReceiptStore {
     const migrated = this.database
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'run_metadata'")
       .get();
+    this.database.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)");
     if (!migrated) {
       this.database.exec(
         readFileSync(new URL("../../schema/migrations/001_initial.sql", import.meta.url), "utf8"),
       );
+      this.database.prepare("INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)").run();
+    }
+    this.database.prepare("INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)").run();
+    const version = this.database.prepare("SELECT 1 FROM schema_migrations WHERE version = 2").get();
+    if (!version) {
+      this.database.exec(readFileSync(new URL("../../schema/migrations/002_run_orchestration.sql", import.meta.url), "utf8"));
+      this.database.prepare("INSERT INTO schema_migrations (version) VALUES (2)").run();
     }
   }
 

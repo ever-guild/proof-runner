@@ -20,6 +20,16 @@ export const INTERNAL_RUNNER_ROUTES = {
   cancel: { method: "POST", path: "/internal/v1/runs/:id/cancel" },
 } as const;
 
+/**
+ * These are the reciprocal, runner-to-API callbacks.  They deliberately use
+ * the same versioned contract and Bearer authentication as API-to-runner
+ * requests, but are served by the API host rather than the runner host.
+ */
+export const INTERNAL_API_CALLBACK_ROUTES = {
+  heartbeat: { method: "POST", path: "/internal/v1/runs/:id/heartbeat" },
+  result: { method: "PUT", path: "/internal/v1/runs/:id/result" },
+} as const;
+
 export const LeaseSchema = z.object({
   leaseId: UuidSchema,
   leaseExpiresAt: IsoDateTimeSchema,

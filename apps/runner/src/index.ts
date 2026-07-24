@@ -7,6 +7,7 @@ export {
 export { DockerSandbox } from "./sandbox.js";
 export { RunnerService } from "./service.js";
 export { createRunnerServer } from "./server.js";
+export { HttpApiCallbackClient } from "./api-client.js";
 
 import { createRunnerServer } from "./server.js";
 
