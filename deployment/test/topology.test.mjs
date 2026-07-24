@@ -23,14 +23,28 @@ test("nginx config routes SPA fallback for human users, proxies bot crawlers to 
   const nginx = await read("nginx.conf");
   assert.match(nginx, /location \/api\//);
   assert.match(nginx, /proxy_pass http:\/\/api:8787;/);
+  assert.match(nginx, /proxy_set_header X-Forwarded-Host \$http_x_forwarded_host;/);
+  assert.match(nginx, /proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;/);
   assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\//);
   assert.match(nginx, /facebookexternalhit\|twitterbot\|slackbot\|linkedinbot\|bot\|crawler\|spider/);
-  assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\/[\s\S]*?proxy_set_header Host \$host;/);
+  assert.match(nginx, /location ~ \^\/\(receipts\|examples\)\/[\s\S]*?proxy_set_header Host \$http_host;/);
   assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html;/);
   assert.doesNotMatch(nginx, /location \/internal\//);
   assert.doesNotMatch(nginx, /proxy_pass http:\/\/api:8787\/internal\//);
   assert.match(nginx, /location = \/internal\s*\{\s*return 404;\s*\}/);
   assert.match(nginx, /location \^~ \/internal\/\s*\{\s*return 404;\s*\}/);
+});
+
+test("negative edge configuration rejects and never proxies /internal/ callback routes to upstream API", async () => {
+  const nginx = await read("nginx.conf");
+  const caddyfile = await read("Caddyfile");
+
+  assert.match(caddyfile, /@api path \/api\/\* \/a2mcp\/\* \/health\/\*/);
+  assert.doesNotMatch(caddyfile, /\/internal\//);
+
+  assert.doesNotMatch(nginx, /proxy_pass.*\/internal/);
+  const hasInternalProxy = /location\s+(?:=\s+|\^~\s+)?\/internal\/?\s*\{[^}]*proxy_pass/.test(nginx);
+  assert.equal(hasInternalProxy, false, "Public edge proxy must not contain any location proxying /internal/");
 });
 
 
