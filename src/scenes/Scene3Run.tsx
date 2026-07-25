@@ -11,17 +11,19 @@ export function Scene3Run({ onNext }: { onNext: () => void }) {
   }, [onNext]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="w-full max-w-4xl mx-auto p-4 md:p-8 space-y-4 animate-fade-in-up">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-100">Executing Proof</h2>
-          <p className="text-sm text-slate-400">Running selected skill in secure sandbox...</p>
+          <h2 className="text-xl md:text-2xl font-semibold text-slate-100">Executing Proof</h2>
+          <p className="text-sm md:text-base text-slate-400 mt-1">Running selected skill in secure sandbox...</p>
         </div>
         <Badge variant="running">RUNNING</Badge>
       </div>
 
       <Terminal 
-        className="h-[400px]"
+        className="h-[300px] md:h-[400px]"
+        collapsible
+        defaultExpanded={true}
         logs={[
           "$ proof-runner exec --skill lint-test",
           "> Initializing sandbox...",

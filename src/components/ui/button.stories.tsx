@@ -66,3 +66,11 @@ export const Disabled: Story = {
     children: 'Not Allowed',
   },
 };
+
+export const Loading: Story = {
+  args: {
+    variant: 'primary',
+    loading: true,
+    children: 'Processing...',
+  },
+};
