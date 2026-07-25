@@ -2,12 +2,11 @@
 
 Independent execution verification for agent-generated software.
 
-Status: the checked-in web flow is a demo preview. API, receipt, HTTPS, and
-OKX.AI availability must be confirmed against the deployed service.
+Status: The local repository provides the web UI and inspection contract. Public HTTP endpoints and OKX.AI integration become operational upon live deployment.
 
 ## Human and agent surfaces
 
-- Human interface: /
+- Human UI: /
 - Agent contract: /skill.md
 - Demo PASS receipt: /examples/passed
 - Demo FAIL receipt: /examples/broken
@@ -15,15 +14,36 @@ OKX.AI availability must be confirmed against the deployed service.
 ## Frozen API routes
 
 - Inspect repository: POST /api/inspect
-- Start verification: POST /api/verify
-- Run status: GET /api/runs/{id}
-- Receipt JSON: GET /api/receipts/{id}
+- Start verification: POST /api/verify (requires Idempotency-Key header)
+- Poll run status: GET /api/runs/{id}
+- Fetch signed receipt JSON: GET /api/receipts/{id}
+- A2MCP Inspect: POST /a2mcp/inspect_repository
+- A2MCP Verify: POST /a2mcp/verify_repository
 
-## MVP limitations
+## Receipt JSON example
 
-- Canonical public GitHub repositories only
-- Node.js and TypeScript only
-- npm and pnpm lockfiles only
-- No repository secrets or user-provided shell commands
-- PASS covers only the checks named in the receipt
-- Timeout and infrastructure failures are INCONCLUSIVE, never FAIL
+```json
+{
+  "contractVersion": "1.0.0",
+  "payload": {
+    "runId": "run-12345",
+    "verdict": "PASS",
+    "repositoryUrl": "https://github.com/owner/repository",
+    "commitSha": "0123456789abcdef0123456789abcdef01234567",
+    "skill": "node-typescript@1.0.0",
+    "checks": [
+      { "name": "npm test", "status": "PASS" }
+    ]
+  },
+  "signature": "..."
+}
+```
+
+## MVP limitations & verdict rules
+
+- Canonical public GitHub HTTPS repositories only.
+- Node.js and TypeScript with npm or pnpm lockfile only.
+- No secrets or custom user shell commands.
+- PASS: All pinned skill verification checks passed.
+- FAIL: Code executed and one or more checks failed.
+- INCONCLUSIVE: Timeout, network error, or system error. Timeout is never FAIL.

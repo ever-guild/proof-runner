@@ -116,7 +116,7 @@ export function LandingPage() {
                 <div className="space-y-1.5">
                   <label htmlFor="git-ref" className="text-sm font-semibold text-slate-200">Git reference</label>
                   <div className="grid grid-cols-[9rem_1fr] gap-3">
-                    <select id="git-ref-type" name="gitRefType" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <select id="git-ref-type" name="gitRefType" aria-label="Git reference type" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
                       <option value="branch">Branch</option>
                       <option value="tag">Tag</option>
                       <option value="commit">Commit SHA</option>

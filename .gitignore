@@ -9,3 +9,5 @@ coverage/
 *.db-wal
 *.log
 storybook-static/
+graphify-out/
+.bin/
