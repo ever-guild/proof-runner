@@ -6,7 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
-import { demoReceipts, getDemoKind, isNonFailStatus } from "../lib/demo"
+import {
+  demoReceipts,
+  getDemoKind,
+  getDemoProgressLabel,
+  getDemoReceiptDisplayVerdict,
+  isNonFailStatus,
+  isPinnedDemoReceipt,
+} from "../lib/demo"
 
 import { getRun, type Run } from "../lib/api"
 
@@ -14,7 +21,7 @@ const STEP_DELAY_MS = 500
 
 export function RunPage() {
   const { id } = useParams()
-  const isDemo = !id || id === "demo-123" || id === "fail-demo" || id === "passed" || id === "broken" || window.location.pathname.includes("/examples/")
+  const isDemo = !id || id === "demo-123" || id === "fail-demo" || id === "passed" || id === "broken" || id === "timeout" || id === "system-error" || id === "inconclusive" || window.location.pathname.includes("/examples/")
   return isDemo ? <DemoRunPage /> : <LiveRunPage id={id} />
 }
 
@@ -177,6 +184,7 @@ function DemoRunPage() {
   const { id } = useParams()
   const kind = getDemoKind(id, window.location.pathname)
   const receipt = demoReceipts[kind]
+  const isPinnedReference = isPinnedDemoReceipt(receipt)
   const [completedSteps, setCompletedSteps] = React.useState(0)
   const [copyLabel, setCopyLabel] = React.useState("Copy result URL")
   const isComplete = completedSteps === receipt.checks.length + 1
@@ -211,7 +219,7 @@ function DemoRunPage() {
       return { name: check.name, status }
     }),
     {
-      name: "Demo receipt generated",
+      name: isPinnedReference ? "Demo reference ready" : "Simulated result ready",
       status:
         completedSteps > receipt.checks.length
           ? receipt.status === "TIMEOUT" ? "TIMEOUT"
@@ -225,46 +233,39 @@ function DemoRunPage() {
 
   const logs = kind === "broken"
     ? [
-        "> Demo sandbox initialized",
-        "> Demo build completed",
-        "> Demo test suite: 4 passed, 1 failed",
+        "> Static demo state initialized",
+        "> Public source reference loaded",
+        "> Static test outcome: 4 passed, 1 failed",
         "FAIL: Unit tests",
-        "Demo execution complete",
+        "Static demo sequence complete",
       ]
     : kind === "timeout"
       ? [
-          "> Demo sandbox initialized",
-          "> Demo build running...",
-          "TIMEOUT: Execution timed out at 45s",
-          "Demo execution aborted",
+          "> Simulated demo state initialized",
+          "TIMEOUT: Execution limit exceeded before checks completed",
+          "Simulated sequence stopped",
         ]
       : kind === "system-error"
         ? [
-            "> Demo sandbox initializing...",
-            "SYSTEM_ERROR: Docker daemon unexpected exit",
-            "Demo execution failed",
+            "> Simulated demo state initialized",
+            "SYSTEM_ERROR: Simulated runner connection lost",
+            "Simulated sequence stopped",
           ]
         : kind === "inconclusive"
           ? [
-              "> Demo sandbox initialized",
-              "> Demo build completed",
-              "INCONCLUSIVE: Coverage below confidence threshold",
-              "Demo execution complete",
+              "> Simulated demo state initialized",
+              "INCONCLUSIVE: Simulated ambiguous test output",
+              "Simulated sequence complete",
             ]
           : [
-              "> Demo sandbox initialized",
-              "> Demo build completed",
-              "> Demo test suite: 5 passed",
+              "> Static demo state initialized",
+              "> Public source reference loaded",
+              "> Static test outcome: 5 passed",
               "PASS: All configured checks passed",
-              "Demo execution complete",
+              "Static demo sequence complete",
             ]
 
-  const tagLabel = receipt.gitTag
-
-
-  const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
-    : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
-      : receipt.verdict
+  const displayVerdict = getDemoReceiptDisplayVerdict(receipt)
 
   const alertStyle = displayVerdict === "FAIL"
     ? { border: "border-fail/40 bg-fail/10", title: "text-fail font-bold", icon: <XCircle className="w-4 h-4 text-fail" /> }
@@ -282,11 +283,15 @@ function DemoRunPage() {
             Demo simulation — no repository code is executed
           </p>
           <h1 className="text-2xl font-bold text-white mb-2">
-            {isComplete ? "Demo verification complete" : "Demo verification in progress"}
+            {isComplete ? "Demo simulation complete" : "Demo simulation in progress"}
           </h1>
-          <p className="text-slate-400 font-mono text-sm break-all">
-            {receipt.repository} • Tag <span className="text-indigo-300">{tagLabel}</span> ({receipt.commit.slice(0, 7)})
-          </p>
+          {isPinnedReference ? (
+            <p className="text-slate-400 font-mono text-sm break-all">
+              {receipt.provenance.repository} • Tag <span className="text-indigo-300">{receipt.provenance.gitTag}</span> ({receipt.provenance.commit.slice(0, 7)})
+            </p>
+          ) : (
+            <p className="text-slate-400 font-mono text-sm break-all">{receipt.simulationNote}</p>
+          )}
         </div>
         <Button type="button" variant="secondary" size="sm" className="gap-2 self-start sm:self-center" onClick={() => void copyUrl()}>
           <Copy className="w-3.5 h-3.5" /> {copyLabel}
@@ -344,13 +349,13 @@ function DemoRunPage() {
               <CardTitle className="text-sm uppercase tracking-wider text-slate-500">Demo details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm font-mono text-slate-300">
-              <div><p className="text-slate-500 text-xs">Runtime</p><p>node:22 (sample)</p></div>
-              <div><p className="text-slate-500 text-xs">Skill</p><p>{receipt.skill}</p></div>
-              <div><p className="text-slate-500 text-xs">Git tag</p><p className="text-indigo-300">{tagLabel}</p></div>
-              <div><p className="text-slate-500 text-xs">Elapsed</p><p>00:0{Math.min(completedSteps, 9)}s (&lt; 45s limit)</p></div>
+              <div><p className="text-slate-500 text-xs">Sample runtime</p><p>node:22</p></div>
+              <div><p className="text-slate-500 text-xs">Demo configuration</p><p>{receipt.skill}</p></div>
+              {isPinnedReference && <div><p className="text-slate-500 text-xs">Git tag</p><p className="text-indigo-300">{receipt.provenance.gitTag}</p></div>}
+              <div><p className="text-slate-500 text-xs">Demo progress</p><p>{getDemoProgressLabel(completedSteps, steps.length)}</p></div>
               {isComplete && (
                 <Button asChild className="w-full">
-                  <Link to={`/examples/${kind}`}>View demo receipt</Link>
+                  <Link to={`/examples/${kind}`}>View demo details</Link>
                 </Button>
               )}
             </CardContent>

@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
+import {
+  getDemoKind,
+  getDemoReceiptOpenGraphMetadata,
+  isDemoKind,
+} from "@ever-guild/proof-runner-metadata";
 import type { ReceiptService } from "@ever-guild/proof-runner-receipt";
 import {
   CONTRACT_VERSION,
@@ -179,14 +184,6 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
     );
 
     try {
-const apiDemoReceipts: Record<string, { verdict: string; status: string; gitTag: string; repository: string; summary: string }> = {
-  passed: { verdict: "PASS", status: "COMPLETED", gitTag: "demo-fixed", repository: "ever-guild/proof-runner", summary: "All 5 demo checks passed in 12.4 seconds." },
-  broken: { verdict: "FAIL", status: "COMPLETED", gitTag: "demo-broken", repository: "ever-guild/proof-runner", summary: "4 of 5 demo checks passed in 14.1 seconds. 1 reproducible code test failure found." },
-  timeout: { verdict: "INCONCLUSIVE", status: "TIMEOUT", gitTag: "demo-timeout", repository: "ever-guild/proof-runner", summary: "Execution timed out after 45,000 ms before completing all checks." },
-  "system-error": { verdict: "INCONCLUSIVE", status: "SYSTEM_ERROR", gitTag: "demo-system-error", repository: "ever-guild/proof-runner", summary: "Runner daemon lost connection (RUNNER_DISCONNECTED)." },
-  inconclusive: { verdict: "INCONCLUSIVE", status: "COMPLETED", gitTag: "demo-inconclusive", repository: "ever-guild/proof-runner", summary: "Build succeeded but test framework output was ambiguous." },
-};
-
       if (request.method === "GET" && htmlReceiptMatch && (request.headers.accept?.includes("text/html") ?? true)) {
         const receiptId = decodePathSegment(htmlReceiptMatch[1] ?? "");
         if (receiptId !== null) {
@@ -197,18 +194,11 @@ const apiDemoReceipts: Record<string, { verdict: string; status: string; gitTag:
           const hostHeader = forwardedHeader("x-forwarded-host") || request.headers.host || "proofrunner.org";
           const protoHeader = forwardedHeader("x-forwarded-proto") || "https";
           const fullUrl = `${protoHeader}://${hostHeader}${url.pathname}`;
-          const isDemo = receiptId === "passed" || receiptId === "broken" || receiptId === "timeout" || receiptId === "system-error" || receiptId === "inconclusive" || url.pathname.startsWith("/examples/");
+          const isDemo = isDemoKind(receiptId);
 
           if (isDemo) {
-            const kind = receiptId === "timeout" || url.pathname.includes("/timeout") ? "timeout"
-              : receiptId === "system-error" || url.pathname.includes("/system-error") ? "system-error"
-                : receiptId === "inconclusive" || url.pathname.includes("/inconclusive") ? "inconclusive"
-                  : receiptId === "broken" || url.pathname.endsWith("/broken") ? "broken"
-                    : "passed";
-            const demo = apiDemoReceipts[kind] ?? apiDemoReceipts["passed"]!;
-            const displayVerdict = demo.status === "TIMEOUT" ? "TIMEOUT" : demo.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR" : demo.verdict;
-            const title = `[DEMO] ${displayVerdict} Verification Receipt (${demo.gitTag}) · ProofRunner`;
-            const description = `Demo verification evidence for ${demo.repository} at tag ${demo.gitTag}: ${demo.summary}`;
+            const kind = getDemoKind(receiptId, url.pathname);
+            const { title, description } = getDemoReceiptOpenGraphMetadata(kind);
 
             const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
             response.writeHead(200, {
