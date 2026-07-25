@@ -1,24 +1,27 @@
 import * as React from "react"
 import { Link, useParams } from "react-router-dom"
-import { AlertCircle, CircleCheck } from "lucide-react"
+import { AlertCircle, AlertOctagon, AlertTriangle, CircleCheck, Clock, Copy, Loader2, XCircle } from "lucide-react"
 import { Terminal } from "../components/ui/terminal"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Button } from "../components/ui/button"
-import { demoReceipts, getDemoKind } from "../lib/demo"
+import { Badge } from "../components/ui/badge"
+import { demoReceipts, getDemoKind, isNonFailStatus } from "../lib/demo"
+
 import { getRun, type Run } from "../lib/api"
 
 const STEP_DELAY_MS = 500
 
 export function RunPage() {
   const { id } = useParams()
-  const isDemo = !id || id === "demo-123" || id === "fail-demo" || window.location.pathname.includes("/examples/")
+  const isDemo = !id || id === "demo-123" || id === "fail-demo" || id === "passed" || id === "broken" || window.location.pathname.includes("/examples/")
   return isDemo ? <DemoRunPage /> : <LiveRunPage id={id} />
 }
 
 function LiveRunPage({ id }: { id: string | undefined }) {
   const [run, setRun] = React.useState<Run | null>(null)
   const [error, setError] = React.useState("")
+  const [copyLabel, setCopyLabel] = React.useState("Copy result URL")
 
   React.useEffect(() => {
     if (!id) return
@@ -39,38 +42,132 @@ function LiveRunPage({ id }: { id: string | undefined }) {
     return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
   }, [id])
 
-  if (error) return <div className="container mx-auto max-w-3xl px-4 py-16"><Alert variant="destructive"><AlertCircle className="w-4 h-4" /><AlertTitle>Verification unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>
-  if (!run) return <div className="container mx-auto max-w-3xl px-4 py-16 text-slate-300" aria-live="polite">Loading verification status…</div>
+  const copyUrl = async () => {
+    await navigator.clipboard.writeText(window.location.href)
+    setCopyLabel("Copied!")
+    setTimeout(() => setCopyLabel("Copy result URL"), 2000)
+  }
+
+  if (error) return <div className="container mx-auto max-w-3xl px-4 py-16"><Alert variant="destructive"><AlertCircle className="w-4 h-4" /><AlertTitle>Verification unavailable</AlertTitle><AlertDescription className="break-all">{error}</AlertDescription></Alert></div>
+  if (!run) return <div className="container mx-auto max-w-3xl px-4 py-16 text-slate-300 flex items-center gap-3" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-indigo-400" /> Loading verification status…</div>
 
   const terminal = !["QUEUED", "RUNNING"].includes(run.status)
-  const verdictClass = run.verdict === "PASS" ? "text-pass" : run.verdict === "FAIL" ? "text-fail" : "text-amber-300"
   const checks = run.report?.checks ?? []
+
+  const isTimeout = run.status === "TIMEOUT"
+  const isSystemError = run.status === "SYSTEM_ERROR"
+  const isFail = isNonFailStatus(run.status, run.verdict)
+  const isPass = run.verdict === "PASS" && !isTimeout && !isSystemError
+
+
+  const getVerdictIcon = () => {
+    if (isPass) return <CircleCheck className="w-5 h-5 text-pass" />
+    if (isFail) return <XCircle className="w-5 h-5 text-fail" />
+    if (isTimeout) return <Clock className="w-5 h-5 text-amber-300" />
+    if (isSystemError) return <AlertOctagon className="w-5 h-5 text-rose-400" />
+    return <AlertTriangle className="w-5 h-5 text-amber-300" />
+  }
+
+  const getVerdictTitle = () => {
+    if (isPass) return "Verdict: PASS"
+    if (isFail) return "Verdict: FAIL (Code check failure)"
+    if (isTimeout) return "Status: TIMEOUT (Execution limit exceeded — not code failure)"
+    if (isSystemError) return `Status: SYSTEM_ERROR (${run.systemError?.code ?? "Infrastructure failure"} — not code failure)`
+    return `Verdict: ${run.verdict ?? "INCONCLUSIVE"}`
+  }
+
+  const getBadgeVariant = (): "pass" | "fail" | "running" | "queued" | "inconclusive" | "timeout" | "system_error" => {
+    if (run.status === "RUNNING") return "running"
+    if (run.status === "QUEUED") return "queued"
+    if (run.status === "TIMEOUT") return "timeout"
+    if (run.status === "SYSTEM_ERROR") return "system_error"
+    if (run.verdict === "PASS") return "pass"
+    if (run.verdict === "FAIL") return "fail"
+    return "inconclusive"
+  }
+
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
-      <div className="mb-8">
-        <p className="mb-3 text-xs font-mono font-semibold uppercase tracking-widest text-indigo-300">Live verification</p>
-        <h1 className="text-2xl font-bold text-white mb-2">{terminal ? "Verification complete" : "Verification in progress"}</h1>
-        <p className="text-slate-400 font-mono text-sm">Run {run.id}</p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="mb-3 text-xs font-mono font-semibold uppercase tracking-widest text-indigo-300">Live verification</p>
+          <h1 className="text-2xl font-bold text-white mb-2">{terminal ? "Verification complete" : "Verification in progress"}</h1>
+          <p className="text-slate-400 font-mono text-sm break-all">Run {run.id}</p>
+        </div>
+        <Button type="button" variant="secondary" size="sm" className="gap-2 self-start sm:self-center" onClick={() => void copyUrl()}>
+          <Copy className="w-3.5 h-3.5" /> {copyLabel}
+        </Button>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
-          <Card><CardContent className="p-6"><div className="space-y-4 font-mono text-sm" aria-live="polite">
-            <div className="flex justify-between gap-4"><span className="text-slate-300">Run status</span><span className="text-indigo-300">{run.status}</span></div>
-            {run.activeStage && <div className="flex justify-between gap-4"><span className="text-slate-300">Current stage</span><span className="text-running animate-pulse">{run.activeStage}</span></div>}
-            {run.queuePosition && <div className="flex justify-between gap-4"><span className="text-slate-300">Queue position</span><span className="text-slate-300">{run.queuePosition}</span></div>}
-            {checks.map((check) => <div key={check.id} className="flex items-center justify-between gap-4"><span className="text-slate-300">{check.title}</span><span className={check.outcome === "FAILED" ? "text-fail" : check.outcome === "PASSED" ? "text-pass" : check.outcome === "INCONCLUSIVE" ? "text-amber-300" : "text-slate-400"}>{check.outcome}</span></div>)}
-          </div></CardContent></Card>
-          {terminal && <Alert variant={run.verdict === "FAIL" ? "destructive" : "default"}>
-            {run.verdict === "PASS" ? <CircleCheck className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-            <AlertTitle className={verdictClass}>Verdict: {run.verdict ?? "INCONCLUSIVE"}</AlertTitle>
-            <AlertDescription>{run.systemError?.message ?? run.report?.reasonCode ?? "Normalized verification evidence is shown above."}</AlertDescription>
-          </Alert>}
+          <Card>
+            <CardContent className="p-6">
+              <div className="space-y-4 font-mono text-sm" aria-live="polite">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-300">Run status</span>
+                  <Badge variant={getBadgeVariant()}>{run.status}</Badge>
+                </div>
+                {run.activeStage && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-slate-300">Current stage</span>
+                    <span className="text-running animate-pulse flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {run.activeStage}</span>
+                  </div>
+                )}
+                {run.queuePosition !== null && run.queuePosition !== undefined && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-slate-300">Queue position</span>
+                    <span className="text-slate-300">#{run.queuePosition}</span>
+                  </div>
+                )}
+                {checks.map((check) => (
+                  <div key={check.id} className="flex items-center justify-between gap-4 py-1 border-t border-white/5">
+                    <span className="text-slate-300 break-all">{check.title}</span>
+                    <span className={
+                      check.outcome === "FAILED" ? "text-fail flex items-center gap-1"
+                        : check.outcome === "PASSED" ? "text-pass flex items-center gap-1"
+                          : check.outcome === "INCONCLUSIVE" ? "text-amber-300 flex items-center gap-1"
+                            : "text-slate-400"
+                    }>
+                      {check.outcome === "PASSED" && <CircleCheck className="w-3.5 h-3.5" />}
+                      {check.outcome === "FAILED" && <XCircle className="w-3.5 h-3.5" />}
+                      {check.outcome === "INCONCLUSIVE" && <AlertTriangle className="w-3.5 h-3.5" />}
+                      {check.outcome}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {terminal && (
+            <Alert variant={isFail ? "destructive" : "default"} className={`border ${isPass ? "border-pass/40 bg-pass/10" : isFail ? "border-fail/40 bg-fail/10" : "border-amber-500/40 bg-amber-500/10"}`}>
+              {getVerdictIcon()}
+              <AlertTitle className={`font-bold ${isPass ? "text-pass" : isFail ? "text-fail" : "text-amber-300"}`}>{getVerdictTitle()}</AlertTitle>
+              <AlertDescription className="text-slate-300 mt-1 break-all">
+                {run.systemError?.message ?? run.report?.reasonCode ?? (isTimeout ? "Verification timed out before completing all checks." : "Normalized verification evidence is shown above.")}
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
-        <div className="space-y-6"><Card><CardHeader><CardTitle className="text-sm uppercase tracking-wider text-slate-500">Evidence</CardTitle></CardHeader><CardContent className="space-y-4 text-sm font-mono text-slate-300">
-          <div><p className="text-slate-500 text-xs">Started</p><p>{run.startedAt ?? "Waiting"}</p></div>
-          {run.report && <div><p className="text-slate-500 text-xs">Duration</p><p>{run.report.durationMs} ms</p></div>}
-          {run.links.receipt && <Button asChild className="w-full"><Link to={`/receipts/${run.id}`}>View signed receipt</Link></Button>}
-        </CardContent></Card></div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-500">Evidence</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm font-mono text-slate-300">
+              <div><p className="text-slate-500 text-xs">Started</p><p className="break-all">{run.startedAt ?? "Waiting"}</p></div>
+              {run.completedAt && <div><p className="text-slate-500 text-xs">Completed</p><p className="break-all">{run.completedAt}</p></div>}
+              {run.report && <div><p className="text-slate-500 text-xs">Duration</p><p>{run.report.durationMs} ms</p></div>}
+              {run.links.receipt && (
+                <Button asChild className="w-full">
+                  <Link to={`/receipts/${run.id}`}>View signed receipt</Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
@@ -81,6 +178,7 @@ function DemoRunPage() {
   const kind = getDemoKind(id, window.location.pathname)
   const receipt = demoReceipts[kind]
   const [completedSteps, setCompletedSteps] = React.useState(0)
+  const [copyLabel, setCopyLabel] = React.useState("Copy result URL")
   const isComplete = completedSteps === receipt.checks.length + 1
 
   React.useEffect(() => {
@@ -92,19 +190,35 @@ function DemoRunPage() {
     return () => window.clearTimeout(timer)
   }, [completedSteps, isComplete])
 
+  const copyUrl = async () => {
+    await navigator.clipboard.writeText(window.location.href)
+    setCopyLabel("Copied!")
+    setTimeout(() => setCopyLabel("Copy result URL"), 2000)
+  }
+
   const steps = [
-    ...receipt.checks.map((check, index) => ({
-      name: check.name,
-      status:
-        completedSteps > index
-          ? check.outcome === "FAILED" ? "FAIL" : "PASS"
-          : completedSteps === index ? "RUNNING" : "WAITING",
-    })),
+    ...receipt.checks.map((check, index) => {
+      let status = "WAITING"
+      if (completedSteps > index) {
+        status = check.outcome === "FAILED" ? "FAIL"
+          : check.outcome === "TIMEOUT" ? "TIMEOUT"
+            : check.outcome === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+              : check.outcome === "INCONCLUSIVE" ? "INCONCLUSIVE"
+                : "PASS"
+      } else if (completedSteps === index) {
+        status = "RUNNING"
+      }
+      return { name: check.name, status }
+    }),
     {
       name: "Demo receipt generated",
       status:
         completedSteps > receipt.checks.length
-          ? "PASS"
+          ? receipt.status === "TIMEOUT" ? "TIMEOUT"
+            : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+              : receipt.verdict === "FAIL" ? "FAIL"
+                : receipt.verdict === "INCONCLUSIVE" ? "INCONCLUSIVE"
+                  : "PASS"
           : completedSteps === receipt.checks.length ? "RUNNING" : "WAITING",
     },
   ]
@@ -117,26 +231,66 @@ function DemoRunPage() {
         "FAIL: Unit tests",
         "Demo execution complete",
       ]
-    : [
-        "> Demo sandbox initialized",
-        "> Demo build completed",
-        "> Demo test suite: 5 passed",
-        "PASS: All configured checks passed",
-        "Demo execution complete",
-      ]
+    : kind === "timeout"
+      ? [
+          "> Demo sandbox initialized",
+          "> Demo build running...",
+          "TIMEOUT: Execution timed out at 45s",
+          "Demo execution aborted",
+        ]
+      : kind === "system-error"
+        ? [
+            "> Demo sandbox initializing...",
+            "SYSTEM_ERROR: Docker daemon unexpected exit",
+            "Demo execution failed",
+          ]
+        : kind === "inconclusive"
+          ? [
+              "> Demo sandbox initialized",
+              "> Demo build completed",
+              "INCONCLUSIVE: Coverage below confidence threshold",
+              "Demo execution complete",
+            ]
+          : [
+              "> Demo sandbox initialized",
+              "> Demo build completed",
+              "> Demo test suite: 5 passed",
+              "PASS: All configured checks passed",
+              "Demo execution complete",
+            ]
+
+  const tagLabel = receipt.gitTag
+
+
+  const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
+    : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
+      : receipt.verdict
+
+  const alertStyle = displayVerdict === "FAIL"
+    ? { border: "border-fail/40 bg-fail/10", title: "text-fail font-bold", icon: <XCircle className="w-4 h-4 text-fail" /> }
+    : displayVerdict === "TIMEOUT" || displayVerdict === "INCONCLUSIVE"
+      ? { border: "border-amber-500/40 bg-amber-500/10", title: "text-amber-300 font-bold", icon: <AlertTriangle className="w-4 h-4 text-amber-300" /> }
+      : displayVerdict === "SYSTEM_ERROR"
+        ? { border: "border-rose-500/40 bg-rose-500/10", title: "text-rose-300 font-bold", icon: <AlertOctagon className="w-4 h-4 text-rose-300" /> }
+        : { border: "border-pass/40 bg-pass/10", title: "text-pass font-bold", icon: <CircleCheck className="w-4 h-4 text-pass" /> }
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
-      <div className="mb-8">
-        <p className="mb-3 text-xs font-mono font-semibold uppercase tracking-widest text-amber-300">
-          Demo simulation — no repository code is executed
-        </p>
-        <h1 className="text-2xl font-bold text-white mb-2">
-          {isComplete ? "Demo verification complete" : "Demo verification in progress"}
-        </h1>
-        <p className="text-slate-400 font-mono text-sm">
-          {receipt.repository} • Commit {receipt.commit.slice(0, 7)}
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="mb-3 text-xs font-mono font-semibold uppercase tracking-widest text-amber-300">
+            Demo simulation — no repository code is executed
+          </p>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            {isComplete ? "Demo verification complete" : "Demo verification in progress"}
+          </h1>
+          <p className="text-slate-400 font-mono text-sm break-all">
+            {receipt.repository} • Tag <span className="text-indigo-300">{tagLabel}</span> ({receipt.commit.slice(0, 7)})
+          </p>
+        </div>
+        <Button type="button" variant="secondary" size="sm" className="gap-2 self-start sm:self-center" onClick={() => void copyUrl()}>
+          <Copy className="w-3.5 h-3.5" /> {copyLabel}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -145,14 +299,21 @@ function DemoRunPage() {
             <CardContent className="p-6">
               <div className="space-y-4 font-mono text-sm" aria-live="polite">
                 {steps.map((step) => (
-                  <div key={step.name} className="flex items-center justify-between gap-4">
-                    <span className={step.status === "WAITING" ? "text-slate-600" : "text-slate-300"}>{step.name}</span>
+                  <div key={step.name} className="flex items-center justify-between gap-4 py-1 border-b border-white/5 last:border-0">
+                    <span className={step.status === "WAITING" ? "text-slate-600 break-all" : "text-slate-300 break-all"}>{step.name}</span>
                     <span className={
-                      step.status === "FAIL" ? "text-fail"
-                        : step.status === "PASS" ? "text-pass"
-                          : step.status === "RUNNING" ? "text-running animate-pulse"
-                            : "text-slate-600"
+                      step.status === "FAIL" ? "text-fail flex items-center gap-1"
+                        : step.status === "PASS" ? "text-pass flex items-center gap-1"
+                          : step.status === "RUNNING" ? "text-running animate-pulse flex items-center gap-1"
+                            : step.status === "TIMEOUT" || step.status === "INCONCLUSIVE" ? "text-amber-300 flex items-center gap-1"
+                              : step.status === "SYSTEM_ERROR" ? "text-rose-300 flex items-center gap-1"
+                                : "text-slate-600"
                     }>
+                      {step.status === "PASS" && <CircleCheck className="w-3.5 h-3.5" />}
+                      {step.status === "FAIL" && <XCircle className="w-3.5 h-3.5" />}
+                      {step.status === "RUNNING" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {(step.status === "TIMEOUT" || step.status === "INCONCLUSIVE") && <AlertTriangle className="w-3.5 h-3.5" />}
+                      {step.status === "SYSTEM_ERROR" && <AlertOctagon className="w-3.5 h-3.5" />}
                       {step.status}
                     </span>
                   </div>
@@ -162,10 +323,12 @@ function DemoRunPage() {
           </Card>
 
           {isComplete && (
-            <Alert variant={kind === "broken" ? "destructive" : "default"} className="animate-fade-in-up">
-              {kind === "broken" ? <AlertCircle className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
-              <AlertTitle>Demo verdict: {receipt.verdict}</AlertTitle>
-              <AlertDescription>{receipt.summary}</AlertDescription>
+            <Alert variant={displayVerdict === "FAIL" ? "destructive" : "default"} className={`animate-fade-in-up border ${alertStyle.border}`}>
+              {alertStyle.icon}
+              <AlertTitle className={alertStyle.title}>
+                Demo verdict: {displayVerdict}
+              </AlertTitle>
+              <AlertDescription className="text-slate-300">{receipt.summary}</AlertDescription>
             </Alert>
           )}
 
@@ -183,10 +346,11 @@ function DemoRunPage() {
             <CardContent className="space-y-4 text-sm font-mono text-slate-300">
               <div><p className="text-slate-500 text-xs">Runtime</p><p>node:22 (sample)</p></div>
               <div><p className="text-slate-500 text-xs">Skill</p><p>{receipt.skill}</p></div>
-              <div><p className="text-slate-500 text-xs">Elapsed</p><p>00:0{Math.min(completedSteps, 9)}s</p></div>
+              <div><p className="text-slate-500 text-xs">Git tag</p><p className="text-indigo-300">{tagLabel}</p></div>
+              <div><p className="text-slate-500 text-xs">Elapsed</p><p>00:0{Math.min(completedSteps, 9)}s (&lt; 45s limit)</p></div>
               {isComplete && (
                 <Button asChild className="w-full">
-                  <Link to={`/receipts/${kind}`}>View demo receipt</Link>
+                  <Link to={`/examples/${kind}`}>View demo receipt</Link>
                 </Button>
               )}
             </CardContent>

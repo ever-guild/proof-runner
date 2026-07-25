@@ -273,4 +273,79 @@ describe("public API server", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it("serves pre-rendered Open Graph HTML for demo receipts, live receipts, and 404 for missing receipts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-server-og-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts);
+    const mockReceipts = {
+      get: (id: string) =>
+        id === "live-pass-1"
+          ? { receipt: { payload: { report: { verdict: "PASS" } } } }
+          : undefined,
+      publicKey: () => undefined,
+      verify: () => ({ valid: true }),
+    };
+
+    const server = createApiServer({
+      store,
+      inspection: new InspectionService(inspectionGateway),
+      orchestrator,
+      bearerToken: "t".repeat(32),
+      receipts: mockReceipts,
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing server address");
+
+    try {
+      const crawlerHeaders = {
+        accept: "text/html",
+        "x-forwarded-host": "proofrunner.org",
+        "x-forwarded-proto": "https",
+      };
+
+      // 1. Demo receipt
+      const demoResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/passed`, {
+        headers: crawlerHeaders,
+      });
+      expect(demoResponse.status).toBe(200);
+      expect(demoResponse.headers.get("content-type")).toContain("text/html");
+      const demoHtml = await demoResponse.text();
+      expect(demoHtml).toContain('<meta property="og:title" content="[DEMO] PASS Verification Receipt (demo-fixed) · ProofRunner" />');
+      expect(demoHtml).toContain('<meta property="og:description" content="Demo verification evidence for ever-guild/proof-runner at tag demo-fixed: All 5 demo checks passed in 12.4 seconds." />');
+      expect(demoHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/passed" />');
+      expect(demoHtml).toContain('<meta property="og:type" content="website" />');
+      expect(demoHtml).not.toContain('src="/src/main.tsx"');
+
+      // 2. Unknown receipt returns 404
+      const missingResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/unknown-id-999`, {
+        headers: crawlerHeaders,
+      });
+      expect(missingResponse.status).toBe(404);
+      expect(missingResponse.headers.get("content-type")).toContain("text/html");
+      const missingHtml = await missingResponse.text();
+      expect(missingHtml).toContain('<meta property="og:title" content="Receipt Not Found · ProofRunner" />');
+      expect(missingHtml).toContain('<meta property="og:description" content="Verification receipt unknown-id-999 was not found." />');
+      expect(missingHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/unknown-id-999" />');
+
+      // 3. Live receipt
+      const liveResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/live-pass-1`, {
+        headers: crawlerHeaders,
+      });
+      expect(liveResponse.status).toBe(200);
+      expect(liveResponse.headers.get("content-type")).toContain("text/html");
+      const liveHtml = await liveResponse.text();
+      expect(liveHtml).toContain('<meta property="og:title" content="Verification Receipt live-pass-1 · PASS · ProofRunner" />');
+      expect(liveHtml).toContain('<meta property="og:description" content="Signed verification evidence receipt for run live-pass-1 with verdict PASS." />');
+      expect(liveHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/live-pass-1" />');
+
+    } finally {
+      orchestrator.stop();
+      store.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });
