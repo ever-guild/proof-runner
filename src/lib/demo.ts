@@ -65,7 +65,7 @@ export const demoReceipts: Record<DemoKind, DemoReceipt> = {
     verdict: "INCONCLUSIVE",
     status: "TIMEOUT",
     gitTag: "demo-timeout",
-    summary: "Execution timed out after 45,000 ms before completing all checks (infrastructure limit, not code failure).",
+    summary: "Execution timed out before completing all checks (simulated infrastructure limit, not code failure).",
     commit: "e4861092d18fb5efd5168dc87dae0e2e81999da0",
     reportHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     checks: [
@@ -82,7 +82,7 @@ export const demoReceipts: Record<DemoKind, DemoReceipt> = {
     verdict: "INCONCLUSIVE",
     status: "SYSTEM_ERROR",
     gitTag: "demo-system-error",
-    summary: "Runner daemon lost connection (RUNNER_DISCONNECTED, retryable infrastructure error — not code failure).",
+    summary: "Runner daemon lost connection (RUNNER_DISCONNECTED, simulated infrastructure error — not code failure).",
     commit: "c4c92581f1e98acb0d6ed0e604005157bf72a184",
     reportHash: "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
     systemError: {
@@ -102,7 +102,7 @@ export const demoReceipts: Record<DemoKind, DemoReceipt> = {
     verdict: "INCONCLUSIVE",
     status: "COMPLETED",
     gitTag: "demo-inconclusive",
-    summary: "Build succeeded but test framework output was ambiguous (UNSUPPORTED_TEST_FRAMEWORK).",
+    summary: "Build succeeded but test framework output was ambiguous (simulated UNSUPPORTED_TEST_FRAMEWORK).",
     commit: "731eb1a558d777ee1a105d9a2ffce6fb177522d3",
     reportHash: "f6e5d4c3b2a109876543210fedcba9876543210fedcba9876543210fedcba987",
     checks: [

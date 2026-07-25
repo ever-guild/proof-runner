@@ -315,7 +315,7 @@ describe("public API server", () => {
       expect(demoResponse.headers.get("content-type")).toContain("text/html");
       const demoHtml = await demoResponse.text();
       expect(demoHtml).toContain('<meta property="og:title" content="[DEMO] PASS Verification Receipt (demo-fixed) · ProofRunner" />');
-      expect(demoHtml).toContain('<meta property="og:description" content="Demo verification evidence for ever-guild/proof-runner at tag demo-fixed: All 5 demo checks passed in 12.4 seconds." />');
+      expect(demoHtml).toContain('<meta property="og:description" content="Demo verification evidence for ever-guild/proof-runner-demo at tag demo-fixed: All 5 demo checks passed." />');
       expect(demoHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/passed" />');
       expect(demoHtml).toContain('<meta property="og:type" content="website" />');
       expect(demoHtml).not.toContain('src="/src/main.tsx"');

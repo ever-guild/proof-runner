@@ -180,11 +180,11 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
 
     try {
 const apiDemoReceipts: Record<string, { verdict: string; status: string; gitTag: string; repository: string; summary: string }> = {
-  passed: { verdict: "PASS", status: "COMPLETED", gitTag: "demo-fixed", repository: "ever-guild/proof-runner", summary: "All 5 demo checks passed in 12.4 seconds." },
-  broken: { verdict: "FAIL", status: "COMPLETED", gitTag: "demo-broken", repository: "ever-guild/proof-runner", summary: "4 of 5 demo checks passed in 14.1 seconds. 1 reproducible code test failure found." },
-  timeout: { verdict: "INCONCLUSIVE", status: "TIMEOUT", gitTag: "demo-timeout", repository: "ever-guild/proof-runner", summary: "Execution timed out after 45,000 ms before completing all checks." },
-  "system-error": { verdict: "INCONCLUSIVE", status: "SYSTEM_ERROR", gitTag: "demo-system-error", repository: "ever-guild/proof-runner", summary: "Runner daemon lost connection (RUNNER_DISCONNECTED)." },
-  inconclusive: { verdict: "INCONCLUSIVE", status: "COMPLETED", gitTag: "demo-inconclusive", repository: "ever-guild/proof-runner", summary: "Build succeeded but test framework output was ambiguous." },
+  passed: { verdict: "PASS", status: "COMPLETED", gitTag: "demo-fixed", repository: "ever-guild/proof-runner-demo", summary: "All 5 demo checks passed." },
+  broken: { verdict: "FAIL", status: "COMPLETED", gitTag: "demo-broken", repository: "ever-guild/proof-runner-demo", summary: "4 of 5 demo checks passed. 1 reproducible code test failure found." },
+  timeout: { verdict: "INCONCLUSIVE", status: "TIMEOUT", gitTag: "demo-timeout", repository: "ever-guild/proof-runner-demo", summary: "Execution timed out before completing all checks (simulated infrastructure limit, not code failure)." },
+  "system-error": { verdict: "INCONCLUSIVE", status: "SYSTEM_ERROR", gitTag: "demo-system-error", repository: "ever-guild/proof-runner-demo", summary: "Runner daemon lost connection (RUNNER_DISCONNECTED, simulated infrastructure error — not code failure)." },
+  inconclusive: { verdict: "INCONCLUSIVE", status: "COMPLETED", gitTag: "demo-inconclusive", repository: "ever-guild/proof-runner-demo", summary: "Build succeeded but test framework output was ambiguous (simulated UNSUPPORTED_TEST_FRAMEWORK)." },
 };
 
       if (request.method === "GET" && htmlReceiptMatch && (request.headers.accept?.includes("text/html") ?? true)) {
