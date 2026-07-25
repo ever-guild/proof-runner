@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Server, Zap, ShieldCheck, Github } from "lucide-react"
+import { Server, Zap, ShieldCheck, GitBranch } from "lucide-react"
 
 export function OpenGraphBanner() {
   return (
@@ -28,7 +28,7 @@ export function OpenGraphBanner() {
         
         <div className="flex items-center gap-12 text-slate-400">
           <div className="flex items-center gap-3">
-            <Github className="w-8 h-8 text-slate-300" />
+            <GitBranch className="w-8 h-8 text-slate-300" />
             <span className="text-xl font-medium">Any Repository</span>
           </div>
           <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
