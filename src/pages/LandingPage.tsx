@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { Button } from "../components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card"
 import { Input } from "../components/ui/input"
+import { Select } from "../components/ui/select"
 import { Badge } from "../components/ui/badge"
 import { isCanonicalGitHubRepository } from "../lib/demo"
 import { inspectRepository, startVerification, type Inspection } from "../lib/api"
@@ -63,15 +64,16 @@ export function LandingPage() {
   return (
     <div className="flex flex-col items-center">
       {/* Hero Section */}
-      <section className="w-full pt-32 pb-20 px-4 text-center">
+      <section className="w-full min-h-screen flex flex-col justify-center pt-16 pb-20 px-4 text-center">
         <div className="container mx-auto max-w-4xl">
           <p className="text-indigo-300 font-mono tracking-widest uppercase text-xs mb-6 font-semibold inline-block">
             Independent software verification for AI agents
           </p>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-8">
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6">
             Agent-built software,<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-emerald-300">independently verified.</span>
           </h1>
+          <p className="text-xl text-white font-semibold tracking-wide uppercase mb-4">Run it. Prove it.</p>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
             ProofRunner executes an exact Git commit in an isolated environment using a pinned verification skill and returns a reproducible PASS / FAIL receipt.
           </p>
@@ -97,46 +99,53 @@ export function LandingPage() {
       </section>
 
       {/* Interactive Verification Form */}
-      <section id="verify" className="w-full py-20 px-4 relative scroll-mt-20">
+      <section id="verify" className="w-full py-24 px-4 relative scroll-mt-20 flex justify-center">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
-        <div className="container mx-auto max-w-2xl relative z-10">
-          <Card className="p-2 border-white/20">
-            <CardHeader>
-              <h2 className="text-white text-xl font-semibold">Verify Repository</h2>
-              <CardDescription className="text-slate-300 text-sm">Enter a public GitHub repository to start inspection.</CardDescription>
+        <div className="container mx-auto max-w-3xl relative z-10">
+          <Card className="p-6 md:p-8 border-white/20 bg-black/40 backdrop-blur-md shadow-2xl">
+            <CardHeader className="pb-8">
+              <h2 className="text-white text-3xl font-bold">Verify Repository</h2>
+              <CardDescription className="text-slate-300 text-base mt-2">Enter a public GitHub repository to start inspection.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-6" onSubmit={handleInspect} noValidate>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="repository-url" className="text-sm font-semibold text-slate-200">Repository URL</label>
-                  <Input id="repository-url" name="repositoryUrl" type="url" required aria-describedby={error ? "repository-error" : undefined} aria-invalid={Boolean(error)} placeholder="https://github.com/owner/repository" value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} />
-                  {error && <p id="repository-error" role="alert" className="text-sm text-fail">{error}</p>}
+              <form className="space-y-8" onSubmit={handleInspect} noValidate>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label htmlFor="repository-url" className="text-base font-semibold text-slate-200">Repository URL</label>
+                  <Input id="repository-url" name="repositoryUrl" type="url" required aria-describedby={error ? "repository-error" : undefined} aria-invalid={Boolean(error)} placeholder="https://github.com/owner/repository" value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} className="h-14 text-base px-5" />
+                  {error && <p id="repository-error" role="alert" className="text-sm text-fail mt-1">{error}</p>}
                 </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="git-ref" className="text-sm font-semibold text-slate-200">Git reference</label>
-                  <div className="grid grid-cols-[9rem_1fr] gap-3">
-                    <select id="git-ref-type" name="gitRefType" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                      <option value="branch">Branch</option>
-                      <option value="tag">Tag</option>
-                      <option value="commit">Commit SHA</option>
-                    </select>
-                    <Input id="git-ref" name="gitRef" required placeholder={gitRefType === "commit" ? "Full commit SHA" : `Enter ${gitRefType} name`} value={gitRef} onChange={(event) => setGitRef(event.target.value)} />
+                <div className="space-y-2">
+                  <label htmlFor="git-ref" className="text-base font-semibold text-slate-200">Git reference</label>
+                  <div className="grid grid-cols-[11rem_1fr] gap-4">
+                    <Select 
+                      id="git-ref-type" 
+                      name="gitRefType" 
+                      value={gitRefType} 
+                      onValueChange={(val) => setGitRefType(val as "branch" | "tag" | "commit")}
+                      options={[
+                        { value: 'branch', label: 'Branch' },
+                        { value: 'tag', label: 'Tag' },
+                        { value: 'commit', label: 'Commit SHA' }
+                      ]}
+                      className="h-14 text-base"
+                    />
+                    <Input id="git-ref" name="gitRef" required placeholder={gitRefType === "commit" ? "Full commit SHA" : `Enter ${gitRefType} name`} value={gitRef} onChange={(event) => setGitRef(event.target.value)} className="h-14 text-base px-5" />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="verification-profile" className="text-sm font-semibold text-slate-200">Verification profile</label>
-                  <Input id="verification-profile" readOnly value="Auto-detect (Node.js / TypeScript)" className="text-slate-400 bg-white/5" />
+                <div className="space-y-2">
+                  <label htmlFor="verification-profile" className="text-base font-semibold text-slate-200">Verification profile</label>
+                  <Input id="verification-profile" readOnly value="Auto-detect (Node.js / TypeScript)" className="h-14 text-base px-5 text-slate-400 bg-white/5 border-dashed" />
                 </div>
               </div>
 
               {(inspectState === "idle" || inspectState === "unsupported") && (
-                <Button type="submit" variant="primary" className="w-full font-semibold">
+                <Button type="submit" variant="primary" size="lg" className="w-full h-14 text-lg font-bold tracking-wide mt-4">
                   Inspect repository
                 </Button>
               )}
 
-              {inspectState === "loading" && <Button type="button" disabled variant="primary" className="w-full font-semibold">Inspecting immutable commit…</Button>}
+              {inspectState === "loading" && <Button type="button" disabled variant="primary" size="lg" className="w-full h-14 text-lg font-bold tracking-wide mt-4">Inspecting immutable commit…</Button>}
 
               {inspectState === "supported" && inspection && (
                 <div className="space-y-6 animate-fade-in-up">
