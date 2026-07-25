@@ -47,6 +47,9 @@ Free mode requires the three OKX credential fields and `PAY_TO_ADDRESS` to stay
 empty. Paid mode requires all four and validates the receiving-address shape.
 Provisioning paid-mode values prepares the GitHub Environment only; it does not
 make the current free runtime paid or satisfy PR-006 payment evidence.
+Keep the operator-provided OKX credential values inside the single quotes
+written by `init`: Compose treats those values literally, so `$NAME` and
+`${NAME}` are not interpolated from the host environment.
 
 Do not put any of those values in Git, container images, an issue, or logs.
 Create a new production file, 48-byte random runner token, and dedicated
@@ -134,6 +137,14 @@ Copy the inspected `sha256:<64 hex>` image ID into
 `PROOF_RUNNER_RUNTIME_IMAGE` before `apply` or Compose startup. A registry
 deployment may instead use `repository@sha256:<64 hex>`. Mutable tags, including
 `proof-runner-node:1`, are rejected by the production validator.
+For a registry reference, pull that exact digest on the worker before starting
+the runner; readiness intentionally inspects the image locally and fails closed
+when it is unavailable:
+
+```sh
+docker image pull 'registry.example/proof-runner-node@sha256:<64 hex>'
+docker compose --env-file deployment/.env.production -f deployment/compose.yaml up -d --build
+```
 
 The runner image supplies its immutable skill and sandbox configuration through
 a read-only Docker volume shared with its disposable sibling containers. This

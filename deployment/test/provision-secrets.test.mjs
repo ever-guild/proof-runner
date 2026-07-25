@@ -50,9 +50,9 @@ const createProductionEnv = () => {
 };
 
 const enablePaidMode = (source) => source
-  .replace('OKX_API_KEY=""', 'OKX_API_KEY="api-key-value"')
-  .replace('OKX_SECRET_KEY=""', 'OKX_SECRET_KEY="secret-key-value"')
-  .replace('OKX_PASSPHRASE=""', 'OKX_PASSPHRASE="passphrase-value"')
+  .replace("OKX_API_KEY=''", "OKX_API_KEY='api-key-value'")
+  .replace("OKX_SECRET_KEY=''", "OKX_SECRET_KEY='secret-key-value'")
+  .replace("OKX_PASSPHRASE=''", "OKX_PASSPHRASE='passphrase-value'")
   .replace('PAY_TO_ADDRESS=""', 'PAY_TO_ADDRESS="0x1111111111111111111111111111111111111111"')
   .replace('PROOF_RUNNER_PAYMENT_MODE="free"', 'PROOF_RUNNER_PAYMENT_MODE="paid"');
 
@@ -148,6 +148,11 @@ test("init leaves every operator-owned production value unfilled", () => {
   assert.equal(environment.OKX_SECRET_KEY, "");
   assert.equal(environment.OKX_PASSPHRASE, "");
   assert.equal(environment.PAY_TO_ADDRESS, "");
+});
+
+test("dotenv parser preserves literal dollar signs and escaped apostrophes in operator credentials", () => {
+  const values = parseDotenv("OKX_API_KEY='key$HOME${UNSET}\\'quoted'\n");
+  assert.equal(values.OKX_API_KEY, "key$HOME${UNSET}'quoted");
 });
 
 test("init rejects a public-key path that would collide with the env file", () => {
@@ -373,8 +378,8 @@ test("local validation failure makes zero gh calls", () => {
 test("free mode rejects accidental OKX credentials before any gh call", () => {
   const { envFile } = createProductionEnv();
   const source = readFileSync(envFile, "utf8").replace(
-    'OKX_API_KEY=""',
-    'OKX_API_KEY="must-not-be-used-in-free-mode"',
+    "OKX_API_KEY=''",
+    "OKX_API_KEY='must-not-be-used-in-free-mode'",
   );
   writeFileSync(envFile, source, { mode: 0o600 });
   const calls = [];

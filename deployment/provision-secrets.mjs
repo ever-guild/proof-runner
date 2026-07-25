@@ -107,6 +107,7 @@ export const parseArgs = (argv) => {
 };
 
 const quote = (value) => JSON.stringify(value);
+const literalQuote = (value) => `'${value.replace(/'/g, "\\'")}'`;
 
 const defaultKeyId = () => (
   `receipt-${new Date().toISOString().slice(0, 7)}-${randomBytes(4).toString("hex")}`
@@ -177,12 +178,13 @@ export const initialize = ({
     "# Fill PROOF_RUNNER_DOMAIN and PROOF_RUNNER_RUNTIME_IMAGE; review every non-secret setting.",
     "# Free mode leaves OKX credentials and PAY_TO_ADDRESS empty.",
     "# For paid mode, obtain (do not generate) all four values and set PROOF_RUNNER_PAYMENT_MODE=paid.",
+    "# Keep operator-provided OKX credentials inside the generated single quotes so Compose preserves dollar signs literally.",
     ...VARIABLE_NAMES.slice(0, 1).map((name) => `${name}=${quote(values[name])}`),
     ...CORE_SECRET_NAMES.map((name) => `${name}=${quote(values[name])}`),
     ...VARIABLE_NAMES.slice(1, 17).map((name) => `${name}=${quote(values[name])}`),
     "",
     "# Official OKX x402 seller inputs. Provisioning these does not enable paid mode in runtime.",
-    ...OKX_SECRET_NAMES.map((name) => `${name}=${quote(values[name])}`),
+    ...OKX_SECRET_NAMES.map((name) => `${name}=${literalQuote(values[name])}`),
     ...VARIABLE_NAMES.slice(17).map((name) => `${name}=${quote(values[name])}`),
     "",
   ].join("\n");
@@ -246,9 +248,18 @@ const decodeDoubleQuoted = (source, line) => {
 };
 
 const decodeSingleQuoted = (source, line) => {
-  const end = source.indexOf("'", 1);
-  if (end === -1) fail(`Unterminated quoted value at line ${line}`);
-  return { value: source.slice(1, end), consumed: end + 1 };
+  let value = "";
+  for (let index = 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "'") return { value, consumed: index + 1 };
+    if (character === "\\" && source[index + 1] === "'") {
+      value += "'";
+      index += 1;
+      continue;
+    }
+    value += character;
+  }
+  fail(`Unterminated quoted value at line ${line}`);
 };
 
 export const parseDotenv = (source) => {
