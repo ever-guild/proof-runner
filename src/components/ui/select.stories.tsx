@@ -28,15 +28,20 @@ const options = [
 ];
 
 export const Default: Story = {
-  render: () => {
+  args: {
+    value: 'branch',
+    onValueChange: () => {},
+    options: options,
+    name: 'gitRefType',
+    id: 'git-ref-type',
+  },
+  render: (args) => {
     const [val, setVal] = React.useState('branch');
     return (
       <Select 
+        {...args}
         value={val} 
         onValueChange={setVal} 
-        options={options} 
-        name="gitRefType"
-        id="git-ref-type"
       />
     );
   }
