@@ -7,53 +7,66 @@ import {
   DEMO_REPOSITORY_URL,
   demoReceipts,
   getDemoKind,
+  getDemoOpenGraphMetadata,
+  getDemoProgressLabel,
   isCanonicalGitHubRepository,
   isNonFailStatus,
 } from "./demo"
 import { extractReceiptVerdict } from "../pages/ReceiptPage"
 
 describe("demo route mapping", () => {
-  it("keeps the broken example visibly failed with demo-broken tag", () => {
+  it("keeps the broken example visibly failed with a pinned source reference", () => {
     expect(getDemoKind(undefined, "/examples/broken")).toBe("broken")
     expect(demoReceipts.broken.verdict).toBe("FAIL")
-    expect(demoReceipts.broken.gitTag).toBe("demo-broken")
+    expect(demoReceipts.broken.source).toBe("pinned-reference")
+    expect(demoReceipts.broken.provenance).toEqual({
+      repository: "ever-guild/proof-runner-demo",
+      gitTag: "demo-broken",
+      commit: DEMO_BROKEN_SHA,
+    })
     expect(demoReceipts.broken.checks).toContainEqual({
       name: "Unit tests",
       outcome: "FAILED",
     })
-    expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner-demo")
-    expect(demoReceipts.broken.commit).toBe(DEMO_BROKEN_SHA)
+    expect(demoReceipts.broken).not.toHaveProperty("reportHash")
   })
 
-  it("maps pass aliases to the passing fixture with demo-fixed tag", () => {
+  it("maps pass aliases to the pinned passing source reference", () => {
     expect(getDemoKind("demo-123", "/receipts/demo-123")).toBe("passed")
     expect(getDemoKind(undefined, "/examples/passed")).toBe("passed")
     expect(demoReceipts.passed.verdict).toBe("PASS")
-    expect(demoReceipts.passed.gitTag).toBe("demo-fixed")
-    expect(demoReceipts.passed.repository).toBe("ever-guild/proof-runner-demo")
-    expect(demoReceipts.passed.commit).toBe(DEMO_FIXED_SHA)
+    expect(demoReceipts.passed.source).toBe("pinned-reference")
+    expect(demoReceipts.passed.provenance).toEqual({
+      repository: "ever-guild/proof-runner-demo",
+      gitTag: "demo-fixed",
+      commit: DEMO_FIXED_SHA,
+    })
+    expect(demoReceipts.passed).not.toHaveProperty("reportHash")
   })
 
-  it("maps timeout, system-error, and inconclusive demo routes correctly", () => {
+  it("maps simulated states without inventing repository evidence", () => {
     expect(getDemoKind("timeout", "/examples/timeout")).toBe("timeout")
     expect(demoReceipts.timeout.status).toBe("TIMEOUT")
-    expect(demoReceipts.timeout.gitTag).toBe("demo-timeout")
 
     expect(getDemoKind("system-error", "/examples/system-error")).toBe("system-error")
     expect(demoReceipts["system-error"].status).toBe("SYSTEM_ERROR")
-    expect(demoReceipts["system-error"].gitTag).toBe("demo-system-error")
 
     expect(getDemoKind("inconclusive", "/examples/inconclusive")).toBe("inconclusive")
     expect(demoReceipts.inconclusive.verdict).toBe("INCONCLUSIVE")
-    expect(demoReceipts.inconclusive.gitTag).toBe("demo-inconclusive")
+    for (const kind of ["timeout", "system-error", "inconclusive"] as const) {
+      const receipt = demoReceipts[kind]
+      expect(receipt.source).toBe("simulated")
+      expect(receipt).not.toHaveProperty("provenance")
+      expect(JSON.stringify(receipt)).not.toMatch(/proof-runner-demo|demo-(timeout|system-error|inconclusive)|[a-f0-9]{40}|reportHash/i)
+    }
   })
 })
 
 describe("public demo repository tags & SHAs", () => {
   it("points to the public ever-guild/proof-runner-demo repository", () => {
     expect(DEMO_REPOSITORY_URL).toBe("https://github.com/ever-guild/proof-runner-demo")
-    expect(demoReceipts.passed.repository).toBe("ever-guild/proof-runner-demo")
-    expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner-demo")
+    expect(demoReceipts.passed.provenance.repository).toBe("ever-guild/proof-runner-demo")
+    expect(demoReceipts.broken.provenance.repository).toBe("ever-guild/proof-runner-demo")
   })
 
   it("resolves demo-broken and demo-fixed to distinct immutable commit SHAs", () => {
@@ -62,8 +75,45 @@ describe("public demo repository tags & SHAs", () => {
     expect(DEMO_BROKEN_SHA).toMatch(/^[a-f0-9]{40}$/)
     expect(DEMO_FIXED_SHA).toMatch(/^[a-f0-9]{40}$/)
     expect(DEMO_BROKEN_SHA).not.toBe(DEMO_FIXED_SHA)
-    expect(demoReceipts.broken.commit).toBe(DEMO_BROKEN_SHA)
-    expect(demoReceipts.passed.commit).toBe(DEMO_FIXED_SHA)
+    expect(demoReceipts.broken.provenance.commit).toBe(DEMO_BROKEN_SHA)
+    expect(demoReceipts.passed.provenance.commit).toBe(DEMO_FIXED_SHA)
+  })
+})
+
+describe("demo metadata", () => {
+  it.each([
+    [
+      "passed",
+      "[DEMO] PASS Source Reference (demo-fixed) · ProofRunner",
+      "Static demo reference for ever-guild/proof-runner-demo at tag demo-fixed. No ProofRunner execution or signed receipt was issued.",
+    ],
+    [
+      "broken",
+      "[DEMO] FAIL Source Reference (demo-broken) · ProofRunner",
+      "Static demo reference for ever-guild/proof-runner-demo at tag demo-broken. No ProofRunner execution or signed receipt was issued.",
+    ],
+    [
+      "timeout",
+      "[DEMO] TIMEOUT Simulation · ProofRunner",
+      "Simulated execution-limit example. No repository execution or signed receipt was issued.",
+    ],
+    [
+      "system-error",
+      "[DEMO] SYSTEM_ERROR Simulation · ProofRunner",
+      "Simulated runner-error example. No repository execution or signed receipt was issued.",
+    ],
+    [
+      "inconclusive",
+      "[DEMO] INCONCLUSIVE Simulation · ProofRunner",
+      "Simulated incomplete-result example. No repository execution or signed receipt was issued.",
+    ],
+  ] as const)("uses truthful %s Open Graph metadata", (kind, title, description) => {
+    expect(getDemoOpenGraphMetadata(kind)).toEqual({ title, description })
+  })
+
+  it("labels the animation as progress rather than elapsed execution time", () => {
+    expect(getDemoProgressLabel(3, 6)).toBe("Demo progress: 3 of 6 stages")
+    expect(getDemoProgressLabel(9, 6)).toBe("Demo progress: 6 of 6 stages")
   })
 })
 

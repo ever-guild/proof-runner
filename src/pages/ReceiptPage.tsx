@@ -5,7 +5,13 @@ import { AlertOctagon, AlertTriangle, Check, Clock, Copy, Download, XCircle } fr
 import { Card, CardContent, CardHeader } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
-import { demoReceipts, getDemoKind } from "../lib/demo"
+import {
+  demoReceipts,
+  getDemoKind,
+  getDemoReceiptDisplayVerdict,
+  getDemoReceiptOpenGraphMetadata,
+  isPinnedDemoReceipt,
+} from "../lib/demo"
 import { getReceipt } from "../lib/api"
 
 export function ReceiptPage() {
@@ -123,8 +129,7 @@ function DemoReceiptPage() {
   const kind = getDemoKind(id, location.pathname)
   const receipt = demoReceipts[kind]
   const [copyLabel, setCopyLabel] = React.useState("Copy demo URL")
-  const tagLabel = receipt.gitTag
-
+  const isPinnedReference = isPinnedDemoReceipt(receipt)
 
   const badgeVariantMap: Record<string, "pass" | "fail" | "timeout" | "system_error" | "inconclusive"> = {
     PASS: "pass",
@@ -134,16 +139,13 @@ function DemoReceiptPage() {
     INCONCLUSIVE: "inconclusive",
   }
 
-  const displayVerdict = receipt.status === "TIMEOUT" ? "TIMEOUT"
-    : receipt.status === "SYSTEM_ERROR" ? "SYSTEM_ERROR"
-      : receipt.verdict
+  const displayVerdict = getDemoReceiptDisplayVerdict(receipt)
   const badgeVariant = badgeVariantMap[displayVerdict] ?? "inconclusive"
 
   React.useEffect(() => {
-    const title = `${displayVerdict} Demo Receipt (${tagLabel}) · ProofRunner`
-    const desc = `Demo verification evidence receipt for ${receipt.repository} at tag ${tagLabel}.`
-    updateOpenGraphMeta(title, desc, window.location.href)
-  }, [displayVerdict, receipt.repository, tagLabel])
+    const { title, description } = getDemoReceiptOpenGraphMetadata(kind)
+    updateOpenGraphMeta(title, description, window.location.href)
+  }, [kind])
 
   const copyUrl = async () => {
     await navigator.clipboard.writeText(window.location.href)
@@ -157,7 +159,7 @@ function DemoReceiptPage() {
 
     const anchor = document.createElement("a")
     anchor.href = url
-    anchor.download = `proofrunner-demo-${kind}-${tagLabel}.json`
+    anchor.download = `proofrunner-demo-${kind}.json`
     anchor.click()
     URL.revokeObjectURL(url)
   }
@@ -193,7 +195,9 @@ function DemoReceiptPage() {
         }`} />
         <CardHeader className="border-b border-white/5 bg-black/20">
           <div className="flex items-center justify-between">
-            <h2 className="tracking-wider uppercase text-sm font-semibold text-slate-400">Demo receipt</h2>
+            <h2 className="tracking-wider uppercase text-sm font-semibold text-slate-400">
+              {isPinnedReference ? "Demo source reference" : "Simulated demo outcome"}
+            </h2>
             <Badge variant={badgeVariant}>
               {displayVerdict}
             </Badge>
@@ -202,11 +206,14 @@ function DemoReceiptPage() {
 
         <CardContent className="p-0">
           <dl className="divide-y divide-white/5 text-sm font-mono">
-            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Repository</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.repository}</dd></div>
-            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Git Tag</dt><dd className="col-span-2 text-indigo-300 font-semibold">{tagLabel}</dd></div>
-            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Code commit</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.commit}</dd></div>
-            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Verification skill</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.skill}</dd></div>
-            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Report hash</dt><dd className="col-span-2 text-indigo-400 break-all">{receipt.reportHash}</dd></div>
+            {isPinnedReference ? <>
+              <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Repository</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.provenance.repository}</dd></div>
+              <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Git tag</dt><dd className="col-span-2 text-indigo-300 font-semibold">{receipt.provenance.gitTag}</dd></div>
+              <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Code commit</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.provenance.commit}</dd></div>
+            </> : (
+              <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Source</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.simulationNote}</dd></div>
+            )}
+            <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Demo configuration</dt><dd className="col-span-2 text-slate-300 break-all">{receipt.skill}</dd></div>
             <div className="grid grid-cols-3 p-4"><dt className="text-slate-500">Signature</dt><dd className="col-span-2 text-slate-400">Not issued for demo data</dd></div>
           </dl>
         </CardContent>

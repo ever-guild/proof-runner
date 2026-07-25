@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "pnpm --filter @ever-guild/proof-runner-metadata build",
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src test",
+    "pretest": "pnpm --filter @ever-guild/proof-runner-receipt build && pnpm --filter @ever-guild/proof-runner-metadata build",
     "start": "node dist/index.js",
     "test": "vitest run --config ../../vitest.packages.config.ts",
-    "pretypecheck": "pnpm --filter @ever-guild/proof-runner-receipt build",
+    "pretypecheck": "pnpm --filter @ever-guild/proof-runner-receipt build && pnpm --filter @ever-guild/proof-runner-metadata build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ever-guild/proof-runner-metadata": "workspace:*",
     "@ever-guild/proof-runner-receipt": "workspace:*",
     "@ever-guild/proof-runner-schema": "workspace:*"
   },
