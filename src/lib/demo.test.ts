@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { demoReceipts, getDemoKind, isCanonicalGitHubRepository, isNonFailStatus } from "./demo"
+import {
+  DEMO_BROKEN_SHA,
+  DEMO_BROKEN_TAG,
+  DEMO_FIXED_SHA,
+  DEMO_FIXED_TAG,
+  DEMO_REPOSITORY_URL,
+  demoReceipts,
+  getDemoKind,
+  isCanonicalGitHubRepository,
+  isNonFailStatus,
+} from "./demo"
 import { extractReceiptVerdict } from "../pages/ReceiptPage"
 
 describe("demo route mapping", () => {
@@ -11,8 +21,8 @@ describe("demo route mapping", () => {
       name: "Unit tests",
       outcome: "FAILED",
     })
-    expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner")
-    expect(demoReceipts.broken.commit).toBe("339a3effb97cac6073cd5cf8dab746eca25cd255")
+    expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner-demo")
+    expect(demoReceipts.broken.commit).toBe(DEMO_BROKEN_SHA)
   })
 
   it("maps pass aliases to the passing fixture with demo-fixed tag", () => {
@@ -20,7 +30,8 @@ describe("demo route mapping", () => {
     expect(getDemoKind(undefined, "/examples/passed")).toBe("passed")
     expect(demoReceipts.passed.verdict).toBe("PASS")
     expect(demoReceipts.passed.gitTag).toBe("demo-fixed")
-    expect(demoReceipts.passed.commit).toBe("bd3e75e74c099b9fc4eba5504f91dcad4969b60e")
+    expect(demoReceipts.passed.repository).toBe("ever-guild/proof-runner-demo")
+    expect(demoReceipts.passed.commit).toBe(DEMO_FIXED_SHA)
   })
 
   it("maps timeout, system-error, and inconclusive demo routes correctly", () => {
@@ -38,9 +49,28 @@ describe("demo route mapping", () => {
   })
 })
 
+describe("public demo repository tags & SHAs", () => {
+  it("points to the public ever-guild/proof-runner-demo repository", () => {
+    expect(DEMO_REPOSITORY_URL).toBe("https://github.com/ever-guild/proof-runner-demo")
+    expect(demoReceipts.passed.repository).toBe("ever-guild/proof-runner-demo")
+    expect(demoReceipts.broken.repository).toBe("ever-guild/proof-runner-demo")
+  })
+
+  it("resolves demo-broken and demo-fixed to distinct immutable commit SHAs", () => {
+    expect(DEMO_BROKEN_TAG).toBe("demo-broken")
+    expect(DEMO_FIXED_TAG).toBe("demo-fixed")
+    expect(DEMO_BROKEN_SHA).toMatch(/^[a-f0-9]{40}$/)
+    expect(DEMO_FIXED_SHA).toMatch(/^[a-f0-9]{40}$/)
+    expect(DEMO_BROKEN_SHA).not.toBe(DEMO_FIXED_SHA)
+    expect(demoReceipts.broken.commit).toBe(DEMO_BROKEN_SHA)
+    expect(demoReceipts.passed.commit).toBe(DEMO_FIXED_SHA)
+  })
+})
+
 describe("repository input validation", () => {
   it("accepts only canonical public GitHub repository URLs", () => {
     expect(isCanonicalGitHubRepository("https://github.com/ever-guild/proof-runner")).toBe(true)
+    expect(isCanonicalGitHubRepository(DEMO_REPOSITORY_URL)).toBe(true)
     expect(isCanonicalGitHubRepository("http://github.com/ever-guild/proof-runner")).toBe(false)
     expect(isCanonicalGitHubRepository("https://example.com/ever-guild/proof-runner")).toBe(false)
     expect(isCanonicalGitHubRepository("https://github.com/ever-guild/proof-runner/issues")).toBe(false)

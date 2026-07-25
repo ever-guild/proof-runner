@@ -14,8 +14,14 @@ export interface DemoReceipt {
   checks: Array<{ name: string; outcome: "PASSED" | "FAILED" | "INCONCLUSIVE" | "TIMEOUT" | "SYSTEM_ERROR" }>
 }
 
+export const DEMO_REPOSITORY_URL = "https://github.com/ever-guild/proof-runner-demo"
+export const DEMO_BROKEN_TAG = "demo-broken"
+export const DEMO_FIXED_TAG = "demo-fixed"
+export const DEMO_BROKEN_SHA = "504e54eae8440fb52579b805c107cfa814102003"
+export const DEMO_FIXED_SHA = "73b14d731d858742a50907bdba3b99e09a417e35"
+
 const common = {
-  repository: "ever-guild/proof-runner",
+  repository: "ever-guild/proof-runner-demo",
   skill: "node-typescript@1",
 }
 
@@ -24,9 +30,9 @@ export const demoReceipts: Record<DemoKind, DemoReceipt> = {
     id: "passed",
     verdict: "PASS",
     status: "COMPLETED",
-    gitTag: "demo-fixed",
-    summary: "All 5 demo checks passed in 12.4 seconds.",
-    commit: "bd3e75e74c099b9fc4eba5504f91dcad4969b60e",
+    gitTag: DEMO_FIXED_TAG,
+    summary: "All 5 demo checks passed.",
+    commit: DEMO_FIXED_SHA,
     reportHash: "7f4a28b991c1032a4e9b7f5d91c2b4a8e2f9d1c3a6b5e8c7d9a1b2c3d4e5f607",
     checks: [
       { name: "Repository resolved", outcome: "PASSED" },
@@ -41,9 +47,9 @@ export const demoReceipts: Record<DemoKind, DemoReceipt> = {
     id: "broken",
     verdict: "FAIL",
     status: "COMPLETED",
-    gitTag: "demo-broken",
-    summary: "4 of 5 demo checks passed in 14.1 seconds. 1 reproducible code test failure found.",
-    commit: "339a3effb97cac6073cd5cf8dab746eca25cd255",
+    gitTag: DEMO_BROKEN_TAG,
+    summary: "4 of 5 demo checks passed. 1 reproducible failure found.",
+    commit: DEMO_BROKEN_SHA,
     reportHash: "93d6e46a77e8d3ad6e0c6cacdbb81751a70f98c4a450c9c2540690766cf73b12",
     checks: [
       { name: "Repository resolved", outcome: "PASSED" },
