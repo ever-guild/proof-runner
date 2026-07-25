@@ -2,42 +2,34 @@
 
 Independent execution verification for agent-generated software.
 
-Status: The local repository provides the web UI and inspection contract. Public HTTP endpoints and OKX.AI integration become operational upon live deployment.
+Status: The checked-in repository provides a local web preview and frozen
+contract. Public HTTP endpoints, signed receipts, OKX.AI, and paid x402 are not
+live. Those are separate deployment and approval gates.
 
 ## Human and agent surfaces
 
 - Human UI: /
 - Agent contract: /skill.md
-- Demo PASS receipt: /examples/passed
-- Demo FAIL receipt: /examples/broken
+- Demo PASS source reference: /examples/passed
+- Demo FAIL source reference: /examples/broken
 
 ## Frozen API routes
 
 - Inspect repository: POST /api/inspect
 - Start verification: POST /api/verify (requires Idempotency-Key header)
 - Poll run status: GET /api/runs/{id}
-- Fetch signed receipt JSON: GET /api/receipts/{id}
+- Signed receipt JSON (when issued): GET /api/receipts/{id}
 - A2MCP Inspect: POST /a2mcp/inspect_repository
 - A2MCP Verify: POST /a2mcp/verify_repository
 
-## Receipt JSON example
+## Signed receipt JSON
 
-```json
-{
-  "contractVersion": "1.0.0",
-  "payload": {
-    "runId": "run-12345",
-    "verdict": "PASS",
-    "repositoryUrl": "https://github.com/owner/repository",
-    "commitSha": "0123456789abcdef0123456789abcdef01234567",
-    "skill": "node-typescript@1.0.0",
-    "checks": [
-      { "name": "npm test", "status": "PASS" }
-    ]
-  },
-  "signature": "..."
-}
-```
+When issued, a receipt is a signed envelope with `contractVersion` `"1.0"`,
+`payload` (`id`, `report`, and `createdAt`), `canonicalization`
+`JCS-RFC8785`, `payloadHash`, `signatureAlgorithm`, `keyId`, and `signature`.
+The report carries the run ID, repository URL, resolved commit and ref, pinned
+skill, normalized checks, verdict, duration, and completion time. A receipt is
+not available until the public service has executed a run and issued it.
 
 ## MVP limitations & verdict rules
 

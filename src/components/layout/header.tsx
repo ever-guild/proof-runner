@@ -18,7 +18,7 @@ export function Header() {
           
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-300">
             <a href="/#how-it-works" className="hover:text-white transition-colors">How it works</a>
-            <a href="/examples/passed" className="hover:text-white transition-colors">Example receipt</a>
+            <a href="/examples/passed" className="hover:text-white transition-colors">Demo source reference</a>
             <a href="/#for-agents" className="hover:text-white transition-colors">For agents</a>
             <a href="/#security" className="hover:text-white transition-colors">Security</a>
             <a href="https://github.com/ever-guild/proof-runner" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>

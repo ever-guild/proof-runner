@@ -38,9 +38,10 @@ export const OperationalLandingDefault: Story = {
     await expect(verifyCta).toBeInTheDocument()
     await expect(verifyCta).toHaveAttribute("href", "#verify")
 
-    const demoReceiptLink = canvas.getByRole("link", { name: "View demo receipt" })
+    const demoReceiptLink = canvas.getByRole("link", { name: "View demo source reference" })
     await expect(demoReceiptLink).toBeInTheDocument()
     await expect(demoReceiptLink).toHaveAttribute("href", "/examples/passed")
+    await expect(canvas.getAllByRole("link", { name: "Demo source reference" }).length).toBeGreaterThan(0)
 
     const skillLink = canvas.getByRole("link", { name: /Get the skill file/i })
     await expect(skillLink).toBeInTheDocument()

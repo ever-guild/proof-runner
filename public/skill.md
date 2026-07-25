@@ -5,11 +5,18 @@ description: Inspect a public GitHub repository and verify an exact commit with 
 
 # ProofRunner integration contract
 
-This file documents the frozen MVP contract for human and AI agent callers. The checked-in web flow currently uses explicitly labelled demo reference data; live endpoints become operational upon public service deployment.
+This file documents the frozen MVP contract for human and AI agent callers. The
+checked-in web flow uses explicitly labelled demo reference data. The public
+service is not currently publicly available, so the routes below describe the
+contract to use only after a deployment is live.
 
 ## When to use ProofRunner
 
-Use ProofRunner to execute configured install, build, and test checks against an immutable public Git commit in an isolated worker. A PASS verdict means only that the checks named in the receipt passed. It is not a security audit or a guarantee that the code is free of defects or malware.
+When the public service is live, use ProofRunner to execute configured install,
+build, and test checks against an immutable public Git commit in an isolated
+worker. A PASS verdict means only that the checks named in the receipt passed.
+It is not a security audit or a guarantee that the code is free of defects or
+malware.
 
 ## MVP limits
 
@@ -21,23 +28,27 @@ Use ProofRunner to execute configured install, build, and test checks against an
 
 ## Public API contract
 
-All JSON API requests use application/json content type.
+All JSON request and response bodies include `"contractVersion": "1.0"`.
 
 1. **Inspect Repository**: `POST /api/inspect`
-   - Request body: `{ "repositoryUrl": "https://github.com/owner/repository", "ref": { "type": "branch" | "tag" | "commit", "value": "string" } }`
+   - Request body includes `contractVersion`, `repositoryUrl`, and `ref`.
    - Resolves a branch, tag, or commit SHA to a full immutable SHA without running repository code.
 
 2. **Start Verification**: `POST /api/verify`
    - Headers: `Idempotency-Key: <unique-key>`
-   - Request body: `{ "repositoryUrl": "https://github.com/owner/repository", "resolvedCommitSha": "<40-char-sha>" }`
-   - Returns run object containing `{ "id": "<run-id>", "status": "QUEUED" | "RUNNING" }`.
+   - Request body includes `contractVersion`, `repositoryUrl`, `resolvedCommitSha`,
+     `resolvedRef`, `skill` (`node-typescript` version `1` with its pinned hash),
+     and `public`.
+   - A new request returns a run in `QUEUED` or `RUNNING`; reusing the same
+     idempotency key returns the existing run.
 
 3. **Poll Run Status**: `GET /api/runs/{id}`
    - Status values: `QUEUED`, `RUNNING`, `COMPLETED`, `TIMEOUT`, `SYSTEM_ERROR`.
    - Terminal statuses: `COMPLETED`, `TIMEOUT`, `SYSTEM_ERROR`. Poll until terminal.
 
 4. **Get Signed Receipt**: `GET /api/receipts/{id}`
-   - Returns structured, signed JSON receipt when the run reaches a terminal state.
+   - Returns a structured, signed JSON receipt when a receipt has been issued.
+     A terminal run without an issued receipt returns `RECEIPT_NOT_FOUND`.
 
 ## Verdict semantics
 
@@ -47,7 +58,14 @@ All JSON API requests use application/json content type.
 
 ## A2MCP and payment modes
 
-- Agent routes: `POST /a2mcp/inspect_repository` and `POST /a2mcp/verify_repository`.
-- Inspection is free.
-- Verification operates in free HTTP 200 mode unless paid x402 mode is explicitly enabled.
-- `Available through OKX.AI` and paid x402 availability are unavailable until live deployment is active.
+- Agent routes are `POST /a2mcp/inspect_repository` and
+  `POST /a2mcp/verify_repository`. The A2MCP verification request carries an
+  `idempotencyKey` in its JSON body.
+- The frozen contract defines free HTTP 200 mode and a possible paid HTTP 402
+  response only when paid mode is explicitly configured and validated. That
+  future response carries a base64-encoded x402 v2 challenge in the
+  `PAYMENT-REQUIRED` header; the idempotent replay uses the same application
+  request and idempotency key.
+- Public OKX.AI/ASP listing and paid x402 mode are not live. Do not claim or
+  invoke either as publicly available until their separate deployment and
+  approval gates are complete.
