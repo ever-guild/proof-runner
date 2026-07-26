@@ -36,6 +36,8 @@ const composeEnvironment = (domain) => {
     PROOF_RUNNER_RECEIPT_KEY_ID: "test-key",
     PROOF_RUNNER_RECEIPT_PRIVATE_KEY: "test-private-key",
     PROOF_RUNNER_BACKUP_PATH: join(tmpdir(), "proof-runner-backups"),
+    PROOF_RUNNER_RUNTIME_IMAGE: `sha256:${"a".repeat(64)}`,
+    PROOF_RUNNER_PROXY_IMAGE: `ubuntu/squid@sha256:${"b".repeat(64)}`,
   };
   if (domain === undefined) {
     delete environment.PROOF_RUNNER_DOMAIN;
