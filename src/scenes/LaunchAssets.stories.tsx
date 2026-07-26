@@ -1,4 +1,5 @@
 import type { StoryObj } from '@storybook/react';
+import { expect, within } from 'storybook/test';
 import { OpenGraphBanner, XBanner } from './LaunchAssets';
 
 const meta = {
@@ -19,6 +20,10 @@ export const OpenGraph: StoryObj = {
       </div>
     </div>
   ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Public GitHub · Node/TS')).toBeInTheDocument();
+  },
 };
 
 export const XHeader: StoryObj = {

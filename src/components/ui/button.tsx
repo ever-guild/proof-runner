@@ -47,9 +47,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           {...props}
           aria-busy={loading || undefined}
           aria-disabled={isDisabled || undefined}
-          disabled={isDisabled || undefined}
+          data-disabled={isDisabled || undefined}
           tabIndex={isDisabled ? -1 : undefined}
-          onClick={isDisabled ? (event) => {
+          onClick={isDisabled ? (event: React.MouseEvent<HTMLElement>) => {
             event.preventDefault()
             event.stopPropagation()
           } : onClick}

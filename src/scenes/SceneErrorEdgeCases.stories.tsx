@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { expect, within } from 'storybook/test';
 import { SceneErrorEdgeCases } from './SceneErrorEdgeCases';
 
 const meta = {
@@ -73,5 +74,10 @@ export const ExpiredLogs: Story = {
 export const Unsupported: Story = {
   args: {
     errorType: 'unsupported',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const [unsupportedBadge] = canvas.getAllByText('UNSUPPORTED');
+    await expect(unsupportedBadge).toHaveClass('bg-slate-500/10', 'text-slate-400');
   },
 };

@@ -87,7 +87,7 @@ export const AsChildDisabled: Story = {
     const link = canvas.getByRole('link', { name: 'Unavailable link' });
     await expect(link).toHaveAttribute('aria-disabled', 'true');
     await expect(link).toHaveAttribute('aria-busy', 'true');
-    await expect(link).toHaveAttribute('disabled');
+    await expect(link).toHaveAttribute('data-disabled', 'true');
     await expect(link).toHaveAttribute('tabindex', '-1');
   },
 };

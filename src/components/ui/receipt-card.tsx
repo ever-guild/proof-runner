@@ -28,7 +28,7 @@ export function ReceiptCard({ hash, receiptId, receiptUrl, price, agentInstructi
             <a href={verifyUrl} className="text-xs text-pass/70 hover:text-pass flex items-center gap-1 transition-colors">
               Verify <ArrowUpRight className="w-3 h-3" />
             </a>
-          ) : <span className="text-xs text-slate-500">Unsigned demo</span>}
+          ) : <span className="text-xs text-slate-400">Unsigned demo</span>}
         </div>
       </CardHeader>
       <CardContent className="pt-5 space-y-4">
