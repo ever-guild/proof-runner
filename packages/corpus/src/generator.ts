@@ -322,9 +322,20 @@ export function generateAllCases(baseDir: string) {
       };
     }
 
-    const firstVarName = Object.keys(oracleObj.variants)[0] || "default";
-    const buggyVarName = oracleObj.variants["buggy"] ? "buggy" : firstVarName;
+    const oracleVariantNames = Object.keys(oracleObj.variants);
+    const hasBuggyFixed = oracleVariantNames.includes("buggy") && oracleVariantNames.includes("fixed");
+    const firstVarName = oracleVariantNames[0] || "default";
+    const buggyVarName = hasBuggyFixed ? "buggy" : firstVarName;
     const failingTests = oracleObj.variants[buggyVarName]?.expected.tests?.failing_exact || ["test failure"];
+
+    const candidateVariants = {
+      buggy: variantsCandidate["buggy"] || variantsCandidate["default"] || { patches: [] },
+      fixed: variantsCandidate["fixed"] || variantsCandidate["default"] || { patches: [] },
+    };
+
+    const buggyVerdict = oracleObj.variants[buggyVarName]?.expected.verdict === "PASS"
+      ? "FAIL"
+      : (oracleObj.variants[buggyVarName]?.expected.verdict ?? "INCONCLUSIVE");
 
     return {
       schema_version: "prvc.candidate/v2",
@@ -346,12 +357,9 @@ export function generateAllCases(baseDir: string) {
         container_image_digest: VALID_OCI_DIGEST,
         network_policy: "disabled",
       },
-      variants: {
-        buggy: variantsCandidate["buggy"] || variantsCandidate["default"],
-        fixed: variantsCandidate["fixed"] || variantsCandidate["default"],
-      },
+      variants: candidateVariants,
       oracle: {
-        buggy_verdict: oracleObj.variants[buggyVarName]?.expected.verdict === "PASS" ? "FAIL" : oracleObj.variants[buggyVarName]?.expected.verdict,
+        buggy_verdict: buggyVerdict,
         fixed_verdict: "PASS",
         failing_tests_exact: failingTests,
       },

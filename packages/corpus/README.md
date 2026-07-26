@@ -22,12 +22,13 @@ The generated release manifest uses a deterministic RFC 8032 test-vector key. It
 - **Profiles (`profiles/`)**: Execution environment definitions (Node.js npm, pnpm, pnpm-workspace, TypeScript).
 - **Suites (`suites/`)**: Test suite manifests (`smoke.yaml`, `core.yaml`, `real-jsts.yaml`, `sandbox.yaml`, `protocol.yaml`, etc.).
 - **Cases (`cases/`)**: 56 logical test cases covering 65 execution variants:
-  - Core PASS/FAIL (10 cases)
-  - Input/detection (6 cases)
-  - Sandbox & resource limits (8 cases)
-  - Receipt tampering & JCS protocol (6 cases)
-  - SWE-PolyBench Verified real JS/TS bug pairs (3 pairs / 6 variants)
-  - BugsJS real Node.js bug pairs (2 pairs / 4 variants)
+  - Core PASS/FAIL and edge cases (10 cases)
+  - Input detection and validation (6 cases)
+  - Sandbox isolation and policy enforcement (14 cases)
+  - Receipt tampering and JCS protocol (12 cases)
+  - Resource limits and process lifecycle (4 cases)
+  - SWE-PolyBench Verified real JS/TS bug pairs (5 cases / 10 variants)
+  - BugsJS real Node.js bug pairs (5 cases / 10 variants)
 - **Reference Harness (`src/`)**: Independent TypeScript evaluator for validating ProofRunner outputs against PRVC oracles and metamorphic relations.
 
 ## Usage
