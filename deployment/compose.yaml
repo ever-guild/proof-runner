@@ -24,6 +24,8 @@ services:
     build:
       context: ..
       dockerfile: deployment/Dockerfile.web
+      args:
+        PUBLIC_BASE_URL: "https://${PROOF_RUNNER_DOMAIN:?set the public HTTPS domain}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health/ready | grep -qx ready"]
@@ -39,14 +41,22 @@ services:
       dockerfile: deployment/Dockerfile.api
     restart: unless-stopped
     environment:
-      HOST: 0.0.0.0
-      PORT: 8787
+      PROOF_RUNNER_API_HOST: 0.0.0.0
+      PROOF_RUNNER_API_PORT: 8787
       DATABASE_PATH: /var/lib/proof-runner/runs.sqlite
       PROOF_RUNNER_RUNNER_URL: http://runner:8788
       PROOF_RUNNER_BEARER_TOKEN: ${PROOF_RUNNER_BEARER_TOKEN:?provision a deployment-scoped token}
       PROOF_RUNNER_RECEIPT_KEY_ID: ${PROOF_RUNNER_RECEIPT_KEY_ID:?set a receipt key id}
       PROOF_RUNNER_RECEIPT_PRIVATE_KEY: ${PROOF_RUNNER_RECEIPT_PRIVATE_KEY:?provision the receipt signing key}
       PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS: ${PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS:-[]}
+      OKX_API_KEY: ${OKX_API_KEY:-}
+      OKX_SECRET_KEY: ${OKX_SECRET_KEY:-}
+      OKX_PASSPHRASE: ${OKX_PASSPHRASE:-}
+      OKX_BASE_URL: ${OKX_BASE_URL:-https://web3.okx.com}
+      PAY_TO_ADDRESS: ${PAY_TO_ADDRESS:-}
+      PROOF_RUNNER_PAYMENT_NETWORK: ${PROOF_RUNNER_PAYMENT_NETWORK:-eip155:196}
+      PROOF_RUNNER_VERIFY_PRICE: ${PROOF_RUNNER_VERIFY_PRICE:-$0.01}
+      PROOF_RUNNER_PAYMENT_MODE: ${PROOF_RUNNER_PAYMENT_MODE:-free}
     volumes:
       - proof_runner_data:/var/lib/proof-runner
     healthcheck:
@@ -67,7 +77,17 @@ services:
       PROOF_RUNNER_PORT: 8788
       PROOF_RUNNER_API_URL: http://api:8787
       PROOF_RUNNER_BEARER_TOKEN: ${PROOF_RUNNER_BEARER_TOKEN:?provision a deployment-scoped token}
-      PROOF_RUNNER_RUNTIME_IMAGE: ${PROOF_RUNNER_RUNTIME_IMAGE:-proof-runner-node:1}
+      PROOF_RUNNER_RUNTIME_IMAGE: ${PROOF_RUNNER_RUNTIME_IMAGE:?pin the runtime image by sha256 digest}
+      PROOF_RUNNER_PROXY_IMAGE: ${PROOF_RUNNER_PROXY_IMAGE:?pin the dependency proxy image by digest}
+      PROOF_RUNNER_LEASE_EXTENSION_MS: ${PROOF_RUNNER_LEASE_EXTENSION_MS:-30000}
+      PROOF_RUNNER_REPOSITORY_BYTES: ${PROOF_RUNNER_REPOSITORY_BYTES:-104857600}
+      PROOF_RUNNER_FILE_COUNT: ${PROOF_RUNNER_FILE_COUNT:-20000}
+      PROOF_RUNNER_DISK_BYTES: ${PROOF_RUNNER_DISK_BYTES:-536870912}
+      PROOF_RUNNER_CPU_COUNT: ${PROOF_RUNNER_CPU_COUNT:-1}
+      PROOF_RUNNER_MEMORY_BYTES: ${PROOF_RUNNER_MEMORY_BYTES:-536870912}
+      PROOF_RUNNER_PIDS: ${PROOF_RUNNER_PIDS:-128}
+      PROOF_RUNNER_EXECUTION_MS: ${PROOF_RUNNER_EXECUTION_MS:-180000}
+      PROOF_RUNNER_OUTPUT_BYTES: ${PROOF_RUNNER_OUTPUT_BYTES:-1048576}
       PROOF_RUNNER_DOCKER_ASSET_CONTAINER: self
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

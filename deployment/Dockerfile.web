@@ -1,6 +1,10 @@
 FROM node:22-alpine AS build
 
+ARG PUBLIC_BASE_URL
+ENV PUBLIC_BASE_URL=$PUBLIC_BASE_URL
+
 WORKDIR /app
+RUN test -n "$PUBLIC_BASE_URL"
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY .storybook ./.storybook
@@ -9,7 +13,9 @@ COPY src ./src
 COPY index.html vite.config.ts tsconfig.ui.json postcss.config.js tailwind.config.js ./
 COPY apps/web ./apps/web
 COPY packages/schema ./packages/schema
+COPY packages/metadata ./packages/metadata
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @ever-guild/proof-runner-metadata build
 RUN pnpm exec vite build
 
 FROM nginx:1.27-alpine
