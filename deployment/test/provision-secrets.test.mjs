@@ -497,6 +497,13 @@ test("runner policy rejects unsafe images, excessive timeout, and undersized dis
     /pinned by sha256 image ID or repository digest/,
   );
   assert.throws(
+    () => validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `bad_host:5000/team/runner@sha256:${"f".repeat(64)}`,
+    }),
+    /pinned by sha256 image ID or repository digest/,
+  );
+  assert.throws(
     () => validateConfiguration({ ...values, PROOF_RUNNER_PROXY_IMAGE: "ubuntu/squid:latest" }),
     /pinned by sha256 digest/,
   );
