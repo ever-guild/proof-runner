@@ -11,7 +11,7 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['pass', 'fail', 'running', 'queued'],
+      options: ['pass', 'fail', 'running', 'queued', 'inconclusive', 'timeout', 'system_error'],
     },
     showIcon: {
       control: 'boolean',
@@ -43,6 +43,24 @@ export const Running: Story = {
 export const Queued: Story = {
   args: {
     variant: 'queued',
+  },
+};
+
+export const Inconclusive: Story = {
+  args: {
+    variant: 'inconclusive',
+  },
+};
+
+export const Timeout: Story = {
+  args: {
+    variant: 'timeout',
+  },
+};
+
+export const SystemError: Story = {
+  args: {
+    variant: 'system_error',
   },
 };
 

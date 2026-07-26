@@ -13,6 +13,12 @@ const alertVariants = cva(
           "border-fail/50 text-fail dark:border-fail [&>svg]:text-fail bg-fail/10",
         success:
           "border-pass/50 text-pass dark:border-pass [&>svg]:text-pass bg-pass/10",
+        inconclusive:
+          "border-inconclusive/50 text-inconclusive dark:border-inconclusive [&>svg]:text-inconclusive bg-inconclusive/10",
+        timeout:
+          "border-timeout/50 text-timeout dark:border-timeout [&>svg]:text-timeout bg-timeout/10",
+        system_error:
+          "border-system_error/50 text-rose-300 dark:border-system_error [&>svg]:text-rose-300 bg-system_error/10",
       },
     },
     defaultVariants: {

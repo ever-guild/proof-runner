@@ -73,10 +73,13 @@ export default defineConfig({
         browser: {
           enabled: true,
           headless: true,
+          // Storybook's shared Vite iframe server can lose dynamic imports when
+          // multiple browser story files reload it at once on CI.
+          fileParallelism: false,
           provider: playwright({}),
           instances: [
-            { browser: 'chromium' },
-            { browser: 'firefox' },
+            { browser: 'firefox', name: 'desktop', viewport: { width: 1440, height: 900 } },
+            { browser: 'chromium', name: 'tablet', viewport: { width: 1024, height: 768 } },
             { browser: 'chromium', name: 'mobile', viewport: { width: 390, height: 844 } }
           ]
 

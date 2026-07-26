@@ -56,6 +56,9 @@ export const OperationalLandingDefault: Story = {
 
     const gitRefInput = canvas.getByLabelText("Git reference")
     await expect(gitRefInput).toBeInTheDocument()
+    const gitRefControls = gitRefInput.parentElement?.parentElement
+    await expect(gitRefControls).toHaveClass("grid-cols-1", "sm:grid-cols-[11rem_1fr]")
+    await expect(gitRefControls?.scrollWidth).toBeLessThanOrEqual(gitRefControls?.clientWidth ?? 0)
 
     const profileInput = canvas.getByLabelText("Verification profile")
     await expect(profileInput).toBeInTheDocument()

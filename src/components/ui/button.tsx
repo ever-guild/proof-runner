@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
+import { Loader2 } from "lucide-react"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "../../lib/utils"
@@ -31,17 +32,47 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  loading?: boolean
 }
 
+// `asChild` preserves the child structure, so loading exposes aria-busy and
+// blocks interaction instead of injecting a spinner into the child markup.
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+  ({ className, variant, size, asChild = false, loading = false, children, disabled, onClick, ...props }, ref) => {
+    const isDisabled = disabled || loading
+    
+    if (asChild) {
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }), isDisabled && "pointer-events-none opacity-50")}
+          ref={ref}
+          {...props}
+          aria-busy={loading || undefined}
+          aria-disabled={isDisabled || undefined}
+          data-disabled={isDisabled || undefined}
+          tabIndex={isDisabled ? -1 : undefined}
+          onClick={isDisabled ? (event: React.MouseEvent<HTMLElement>) => {
+            event.preventDefault()
+            event.stopPropagation()
+          } : onClick}
+        >
+          {children}
+        </Slot>
+      )
+    }
+
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        onClick={onClick}
         {...props}
-      />
+      >
+        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {children}
+      </button>
     )
   }
 )

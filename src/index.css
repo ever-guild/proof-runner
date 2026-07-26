@@ -5,8 +5,17 @@
 @layer base {
   body {
     @apply bg-background text-slate-100 min-h-screen relative overflow-x-hidden;
-    /* Deep space background with a subtle violet radial glow */
-    background-image: radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.15) 0%, rgba(3, 7, 18, 1) 60%);
+    /* Dramatic natural lightning-inspired gradient (Darkened & Anti-banded) */
+    background-color: #030712;
+    background-image: radial-gradient(ellipse at 50% 100%, 
+      #1c1b35 0%, 
+      #18132e 15%, 
+      #140b29 30%, 
+      #110e28 50%, 
+      #0e1528 70%, 
+      #080e1d 85%, 
+      #030712 100%
+    );
     background-attachment: fixed;
   }
 }

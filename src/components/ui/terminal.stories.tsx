@@ -47,3 +47,22 @@ export const WithError: Story = {
     ],
   },
 };
+
+export const Collapsible: Story = {
+  args: {
+    collapsible: true,
+    logs: [
+      "$ proofrunner inspect https://github.com/ever-guild/proof-runner",
+      "> Cloning repository...",
+      "> Analyzing dependencies...",
+      "Found 3 compatible skills.",
+      "$ proofrunner execute --skill lint",
+      "> Running linter...",
+      "PASS: No linting errors found.",
+      "$ proofrunner execute --skill test",
+      "> Running test suite...",
+      "PASS: All tests passed.",
+      "Demo checks complete.",
+    ],
+  },
+};

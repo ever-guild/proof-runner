@@ -14,4 +14,24 @@ describe("Vite development proxy", () => {
       },
     })
   })
+
+  it("serializes Storybook browser files so their shared Vite iframe stays stable on CI", () => {
+    const storybookProject = config.test?.projects?.[0] as {
+      test?: { browser?: { fileParallelism?: boolean } }
+    }
+
+    expect(storybookProject.test?.browser?.fileParallelism).toBe(false)
+  })
+
+  it("exercises the PR-010 desktop, tablet, and mobile layout viewports", () => {
+    const storybookProject = config.test?.projects?.[0] as {
+      test?: { browser?: { instances?: Array<{ name?: string; viewport?: { width: number; height: number } }> } }
+    }
+
+    expect(storybookProject.test?.browser?.instances).toEqual(expect.arrayContaining([
+      { browser: "firefox", name: "desktop", viewport: { width: 1440, height: 900 } },
+      { browser: "chromium", name: "tablet", viewport: { width: 1024, height: 768 } },
+      { browser: "chromium", name: "mobile", viewport: { width: 390, height: 844 } },
+    ]))
+  })
 })

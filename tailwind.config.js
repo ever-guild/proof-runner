@@ -13,6 +13,9 @@ export default {
         pass: '#10b981', // Emerald
         fail: '#f43f5e', // Rose
         running: '#8b5cf6', // Violet
+        inconclusive: '#f59e0b', // Amber
+        timeout: '#ea580c', // Orange
+        system_error: '#dc2626', // Red
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
@@ -27,6 +30,9 @@ export default {
         'inner-pass': 'inset 0 0 10px rgba(16, 185, 129, 0.2)',
         'inner-fail': 'inset 0 0 10px rgba(244, 63, 94, 0.2)',
         'inner-running': 'inset 0 0 10px rgba(139, 92, 246, 0.2)',
+        'inner-inconclusive': 'inset 0 0 10px rgba(245, 158, 11, 0.2)',
+        'inner-timeout': 'inset 0 0 10px rgba(234, 88, 12, 0.2)',
+        'inner-system_error': 'inset 0 0 10px rgba(220, 38, 38, 0.2)',
       },
       keyframes: {
         "fade-in-up": {
