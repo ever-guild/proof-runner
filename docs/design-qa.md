@@ -5,7 +5,7 @@
 The Storybook browser project runs the product stories at these explicit
 viewports:
 
-- desktop: 1440 x 900 Chromium;
+- desktop: 1440 x 900 Firefox;
 - tablet: 1024 x 768 Chromium;
 - mobile: 390 x 844 Chromium;
 - Firefox as a cross-browser baseline.

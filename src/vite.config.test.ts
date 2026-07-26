@@ -29,7 +29,7 @@ describe("Vite development proxy", () => {
     }
 
     expect(storybookProject.test?.browser?.instances).toEqual(expect.arrayContaining([
-      { browser: "chromium", name: "desktop", viewport: { width: 1440, height: 900 } },
+      { browser: "firefox", name: "desktop", viewport: { width: 1440, height: 900 } },
       { browser: "chromium", name: "tablet", viewport: { width: 1024, height: 768 } },
       { browser: "chromium", name: "mobile", viewport: { width: 390, height: 844 } },
     ]))
