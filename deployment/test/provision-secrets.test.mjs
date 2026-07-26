@@ -153,6 +153,8 @@ test("init leaves every operator-owned production value unfilled", () => {
 test("dotenv parser preserves literal dollar signs and escaped apostrophes in operator credentials", () => {
   const values = parseDotenv("OKX_API_KEY='key$HOME${UNSET}\\'quoted'\n");
   assert.equal(values.OKX_API_KEY, "key$HOME${UNSET}'quoted");
+  const trailingBackslash = parseDotenv("OKX_SECRET_KEY='credential\\\\'\n");
+  assert.equal(trailingBackslash.OKX_SECRET_KEY, "credential\\");
 });
 
 test("init rejects a public-key path that would collide with the env file", () => {
@@ -415,6 +417,14 @@ test("paid mode requires the complete OKX credential and receiving-address set",
   );
   const paidValues = parseDotenv(enablePaidMode(readFileSync(envFile, "utf8")));
   assert.equal(validateConfiguration(paidValues), paidValues);
+  assert.throws(
+    () => validateConfiguration({ ...paidValues, OKX_BASE_URL: "https://web3.okx.com:444" }),
+    /official HTTPS facilitator origin/,
+  );
+  assert.equal(
+    validateConfiguration({ ...paidValues, OKX_BASE_URL: "https://web3.okx.com:443" }).OKX_BASE_URL,
+    "https://web3.okx.com:443",
+  );
 });
 
 test("validation rejects an incomplete legacy production schema", () => {
@@ -444,6 +454,20 @@ test("runner policy rejects unsafe images, excessive timeout, and undersized dis
       PROOF_RUNNER_RUNTIME_IMAGE: `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
     }).PROOF_RUNNER_RUNTIME_IMAGE,
     `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
+  );
+  assert.throws(
+    () => validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example/team:123/runner@sha256:${"c".repeat(64)}`,
+    }),
+    /pinned by sha256 image ID or repository digest/,
   );
   assert.throws(
     () => validateConfiguration({ ...values, PROOF_RUNNER_PROXY_IMAGE: "ubuntu/squid:latest" }),

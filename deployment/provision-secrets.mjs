@@ -252,10 +252,18 @@ const decodeSingleQuoted = (source, line) => {
   for (let index = 1; index < source.length; index += 1) {
     const character = source[index];
     if (character === "'") return { value, consumed: index + 1 };
-    if (character === "\\" && source[index + 1] === "'") {
-      value += "'";
-      index += 1;
-      continue;
+    if (character === "\\") {
+      const escaped = source[index + 1];
+      if (escaped === "'") {
+        value += "'";
+        index += 1;
+        continue;
+      }
+      if (escaped === "\\") {
+        value += "\\";
+        index += 1;
+        continue;
+      }
     }
     value += character;
   }
@@ -421,16 +429,20 @@ export const validateConfiguration = (values) => {
   };
   positiveInteger("PROOF_RUNNER_BACKUP_RETENTION_DAYS", 1, 3650);
   positiveInteger("PROOF_RUNNER_BACKUP_INTERVAL_SECONDS", 60, 31_536_000);
-  const runtimeImagePattern = /^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?\/)*(?:[a-z0-9]+(?:[._-][a-z0-9]+)*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[a-f0-9]{64})$/;
+  const imageComponent = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
+  const imageRepository = `${imageComponent}(?:/${imageComponent})*`;
+  const imageRegistry = `(?:${imageComponent}(?:\\.${imageComponent})+(?::[0-9]+)?|localhost(?::[0-9]+)?)/`;
+  const imageNamePattern = new RegExp(`^(?:${imageRegistry})?${imageRepository}$`);
+  const isDigestReference = (value) => {
+    const match = /^(.*)@sha256:([a-f0-9]{64})$/.exec(value);
+    return Boolean(match && imageNamePattern.test(match[1]));
+  };
   const runtimeImage = values.PROOF_RUNNER_RUNTIME_IMAGE;
   if (
     runtimeImage.length > 255
     || !(
       /^sha256:[a-f0-9]{64}$/.test(runtimeImage)
-      || (
-        runtimeImagePattern.test(runtimeImage)
-        && /@sha256:[a-f0-9]{64}$/.test(runtimeImage)
-      )
+      || isDigestReference(runtimeImage)
     )
   ) {
     fail("PROOF_RUNNER_RUNTIME_IMAGE must be pinned by sha256 image ID or repository digest");
@@ -438,8 +450,7 @@ export const validateConfiguration = (values) => {
   const proxyImage = values.PROOF_RUNNER_PROXY_IMAGE;
   if (
     proxyImage.length > 255
-    || !runtimeImagePattern.test(proxyImage)
-    || !/@sha256:[a-f0-9]{64}$/.test(proxyImage)
+    || !isDigestReference(proxyImage)
   ) {
     fail("PROOF_RUNNER_PROXY_IMAGE must be pinned by sha256 digest");
   }
@@ -472,6 +483,7 @@ export const validateConfiguration = (values) => {
   if (
     okxBaseUrl.protocol !== "https:"
     || okxBaseUrl.hostname !== "web3.okx.com"
+    || okxBaseUrl.port
     || okxBaseUrl.username
     || okxBaseUrl.password
     || okxBaseUrl.pathname !== "/"
