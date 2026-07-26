@@ -73,11 +73,11 @@ export function LandingPage() {
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-emerald-300">independently verified.</span>
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            ProofRunner is designed to verify an exact Git commit in an isolated environment using a pinned verification skill. Public execution and signed receipts remain unavailable until deployment; the linked example is a demo source reference.
+            ProofRunner is designed to verify an exact Git commit in an isolated environment using a pinned verification skill. Public execution and signed receipts remain unavailable until deployment; the linked example is synthetic demo data.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Verify a repository</a></Button>
-            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View demo source reference</Link></Button>
+            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View synthetic demo</Link></Button>
           </div>
           <p className="mt-6 text-sm text-slate-300 font-medium">
             <a href="/skill.md" className="hover:text-indigo-300 transition-colors">Using an AI agent? Get the skill file →</a>
