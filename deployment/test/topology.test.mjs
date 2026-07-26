@@ -199,6 +199,9 @@ test("production web artifact publishes one canonical origin in HTML, robots, an
       process.env.PUBLIC_BASE_URL = previousOrigin;
     }
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("Compose uses the API runtime bind names and passes every explicit runner policy", async () => {
   const compose = await read("compose.yaml");
   const api = service(compose, "api");
