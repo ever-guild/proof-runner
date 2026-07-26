@@ -78,8 +78,9 @@ export default defineConfig({
           fileParallelism: false,
           provider: playwright({}),
           instances: [
-            { browser: 'chromium' },
+            { browser: 'chromium', name: 'desktop', viewport: { width: 1440, height: 900 } },
             { browser: 'firefox' },
+            { browser: 'chromium', name: 'tablet', viewport: { width: 1024, height: 768 } },
             { browser: 'chromium', name: 'mobile', viewport: { width: 390, height: 844 } }
           ]
 

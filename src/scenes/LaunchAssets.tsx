@@ -23,7 +23,7 @@ export function OpenGraphBanner() {
         </h1>
         
         <p className="text-2xl text-slate-300 max-w-2xl leading-relaxed mb-16">
-          Autonomous execution and cryptographic receipts for your AI agent skills.
+          Verification previews and receipt formats for your AI agent skills.
         </p>
         
         <div className="flex items-center gap-12 text-slate-400">
@@ -39,7 +39,7 @@ export function OpenGraphBanner() {
           <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
           <div className="flex items-center gap-3">
             <ShieldCheck className="w-8 h-8 text-pass" />
-            <span className="text-xl font-medium text-slate-300">Cryptographic Receipt</span>
+            <span className="text-xl font-medium text-slate-300">Receipt format preview</span>
           </div>
         </div>
       </div>

@@ -35,6 +35,8 @@ export interface ButtonProps
   loading?: boolean
 }
 
+// `asChild` preserves the child structure, so loading exposes aria-busy and
+// blocks interaction instead of injecting a spinner into the child markup.
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, children, disabled, onClick, ...props }, ref) => {
     const isDisabled = disabled || loading

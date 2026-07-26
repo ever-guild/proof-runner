@@ -23,6 +23,8 @@ export const OpenGraph: StoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Public GitHub · Node/TS')).toBeInTheDocument();
+    await expect(canvas.getByText('Verification previews and receipt formats for your AI agent skills.')).toBeInTheDocument();
+    await expect(canvas.getByText('Receipt format preview')).toBeInTheDocument();
   },
 };
 
