@@ -260,7 +260,7 @@ const decodeSingleQuoted = (source, line) => {
         continue;
       }
       if (escaped === "\\") {
-        value += "\\";
+        value += "\\\\";
         index += 1;
         continue;
       }
@@ -431,7 +431,7 @@ export const validateConfiguration = (values) => {
   positiveInteger("PROOF_RUNNER_BACKUP_INTERVAL_SECONDS", 60, 31_536_000);
   const imageComponent = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
   const imageRepository = `${imageComponent}(?:/${imageComponent})*`;
-  const imageRegistry = `(?:${imageComponent}(?:\\.${imageComponent})+(?::[0-9]+)?|localhost(?::[0-9]+)?)/`;
+  const imageRegistry = `(?:${imageComponent}(?:\\.${imageComponent})+(?::[0-9]+)?|${imageComponent}:[0-9]+|localhost(?::[0-9]+)?)/`;
   const imageNamePattern = new RegExp(`^(?:${imageRegistry})?${imageRepository}$`);
   const isDigestReference = (value) => {
     const match = /^(.*)@sha256:([a-f0-9]{64})$/.exec(value);

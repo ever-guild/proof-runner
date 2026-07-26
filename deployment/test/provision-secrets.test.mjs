@@ -150,11 +150,31 @@ test("init leaves every operator-owned production value unfilled", () => {
   assert.equal(environment.PAY_TO_ADDRESS, "");
 });
 
-test("dotenv parser preserves literal dollar signs and escaped apostrophes in operator credentials", () => {
+test("dotenv parser preserves literal dollar signs, apostrophes, and backslashes in operator credentials", () => {
   const values = parseDotenv("OKX_API_KEY='key$HOME${UNSET}\\'quoted'\n");
   assert.equal(values.OKX_API_KEY, "key$HOME${UNSET}'quoted");
   const trailingBackslash = parseDotenv("OKX_SECRET_KEY='credential\\\\'\n");
-  assert.equal(trailingBackslash.OKX_SECRET_KEY, "credential\\");
+  assert.equal(trailingBackslash.OKX_SECRET_KEY, "credential\\\\");
+});
+
+test("single-quoted credentials match Docker Compose interpolation exactly", () => {
+  const { envFile } = createProductionEnv();
+  const source = enablePaidMode(readFileSync(envFile, "utf8")).replace(
+    "OKX_SECRET_KEY='secret-key-value'",
+    "OKX_SECRET_KEY='credential\\\\'",
+  );
+  writeFileSync(envFile, source, { mode: 0o600 });
+  const parsed = parseDotenv(source);
+  const composeFile = fileURLToPath(new URL("../compose.yaml", import.meta.url));
+  const result = spawnSync(
+    "docker",
+    ["compose", "--env-file", envFile, "-f", composeFile, "config", "--format", "json"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const rendered = JSON.parse(result.stdout);
+  assert.equal(rendered.services.api.environment.OKX_SECRET_KEY, parsed.OKX_SECRET_KEY);
+  assert.equal(parsed.OKX_SECRET_KEY, "credential\\\\");
 });
 
 test("init rejects a public-key path that would collide with the env file", () => {
@@ -461,6 +481,13 @@ test("runner policy rejects unsafe images, excessive timeout, and undersized dis
       PROOF_RUNNER_RUNTIME_IMAGE: `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
     }).PROOF_RUNNER_RUNTIME_IMAGE,
     `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry:5000/team/runner@sha256:${"e".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry:5000/team/runner@sha256:${"e".repeat(64)}`,
   );
   assert.throws(
     () => validateConfiguration({
