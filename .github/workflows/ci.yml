@@ -12,6 +12,9 @@ jobs:
   check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, everguild]
+    # A stalled self-hosted runner must not leave a PR permanently pending.
+    # The complete suite normally finishes in under two minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
