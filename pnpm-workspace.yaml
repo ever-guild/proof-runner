@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+allowBuilds:
+  # Vite and its test tooling require esbuild's platform binary installed by
+  # this package's postinstall script. Keep this allowlist explicit so a clean
+  # install is reproducible without enabling arbitrary dependency scripts.
+  esbuild: true

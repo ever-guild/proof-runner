@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
+import {
+  getDemoKind,
+  getDemoReceiptOpenGraphMetadata,
+  isDemoKind,
+} from "@ever-guild/proof-runner-metadata";
 import type { ReceiptService } from "@ever-guild/proof-runner-receipt";
 import {
   CONTRACT_VERSION,
@@ -113,6 +118,49 @@ const decodePathSegment = (value: string): string | null => {
   }
 };
 
+const escapeHtml = (str: string): string =>
+  str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+export const renderReceiptOpenGraphHtml = (params: {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+}): string => {
+  const safeTitle = escapeHtml(params.title);
+  const safeDesc = escapeHtml(params.description);
+  const safeUrl = escapeHtml(params.url);
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeTitle}</title>
+    <meta name="description" content="${safeDesc}" />
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDesc}" />
+    <meta property="og:url" content="${safeUrl}" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:description" content="${safeDesc}" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body style="background-color:#020617;color:#ffffff;font-family:sans-serif;padding:2rem;">
+    <main>
+      <h1>${safeTitle}</h1>
+      <p>${safeDesc}</p>
+    </main>
+  </body>
+</html>`;
+};
+
+
 export const createApiServer = (dependencies: ApiServerDependencies) => {
   const startVerification = (
     idempotencyKey: string,
@@ -129,12 +177,70 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
     const url = new URL(request.url ?? "/", "http://api.internal");
     const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
     const receiptMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)$/);
+    const htmlReceiptMatch = url.pathname.match(/^\/(?:receipts|examples)\/([^/]+)$/);
     const receiptKeyMatch = url.pathname.match(/^\/api\/receipt-keys\/([^/]+)$/);
     const callbackMatch = url.pathname.match(
       /^\/internal\/v1\/runs\/([^/]+)\/(heartbeat|result)$/,
     );
 
     try {
+      if (request.method === "GET" && htmlReceiptMatch && (request.headers.accept?.includes("text/html") ?? true)) {
+        const receiptId = decodePathSegment(htmlReceiptMatch[1] ?? "");
+        if (receiptId !== null) {
+          const forwardedHeader = (name: "x-forwarded-host" | "x-forwarded-proto") => {
+            const value = request.headers[name];
+            return (Array.isArray(value) ? value[0] : value)?.split(",")[0]?.trim();
+          };
+          const hostHeader = forwardedHeader("x-forwarded-host") || request.headers.host || "proofrunner.org";
+          const protoHeader = forwardedHeader("x-forwarded-proto") || "https";
+          const fullUrl = `${protoHeader}://${hostHeader}${url.pathname}`;
+          const isDemo = isDemoKind(receiptId);
+
+          if (isDemo) {
+            const kind = getDemoKind(receiptId, url.pathname);
+            const { title, description } = getDemoReceiptOpenGraphMetadata(kind);
+
+            const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
+            response.writeHead(200, {
+              "cache-control": "public, max-age=60",
+              "content-length": Buffer.byteLength(html),
+              "content-type": "text/html; charset=utf-8",
+            });
+            return response.end(html);
+          }
+
+
+          const liveReceipt = dependencies.receipts?.get(receiptId);
+          if (!liveReceipt) {
+            const title = `Receipt Not Found · ProofRunner`;
+            const description = `Verification receipt ${receiptId} was not found.`;
+            const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
+            response.writeHead(404, {
+              "cache-control": "no-store",
+              "content-length": Buffer.byteLength(html),
+              "content-type": "text/html; charset=utf-8",
+            });
+            return response.end(html);
+          }
+
+          const rawReceipt = liveReceipt.receipt as Record<string, unknown>;
+          const payload = rawReceipt.payload as Record<string, unknown> | undefined;
+          const report = (payload?.report ?? rawReceipt.report) as Record<string, unknown> | undefined;
+          const verdict = typeof report?.verdict === "string" ? report.verdict : typeof rawReceipt.verdict === "string" ? rawReceipt.verdict : "INCONCLUSIVE";
+
+          const title = `Verification Receipt ${receiptId} · ${verdict} · ProofRunner`;
+          const description = `Signed verification evidence receipt for run ${receiptId} with verdict ${verdict}.`;
+          const html = renderReceiptOpenGraphHtml({ id: receiptId, title, description, url: fullUrl });
+          response.writeHead(200, {
+            "cache-control": "public, max-age=60",
+            "content-length": Buffer.byteLength(html),
+            "content-type": "text/html; charset=utf-8",
+          });
+          return response.end(html);
+        }
+      }
+
+
       if (request.method === "GET" && url.pathname === "/health/live") {
         return send(response, 200, { status: "live" });
       }

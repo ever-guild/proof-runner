@@ -41,6 +41,18 @@ function publicMetadataPlugin() {
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
   plugins: [react(), publicMetadataPlugin()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
+      '/a2mcp': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     projects: [{
       extends: true,
@@ -56,9 +68,12 @@ export default defineConfig({
           enabled: true,
           headless: true,
           provider: playwright({}),
-          instances: [{
-            browser: 'chromium'
-          }]
+          instances: [
+            { browser: 'chromium' },
+            { browser: 'firefox' },
+            { browser: 'chromium', name: 'mobile', viewport: { width: 390, height: 844 } }
+          ]
+
         }
       }
     }]

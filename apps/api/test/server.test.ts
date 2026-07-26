@@ -273,4 +273,124 @@ describe("public API server", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it("serves pre-rendered Open Graph HTML for demo receipts, live receipts, and 404 for missing receipts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-server-og-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const runner = new RecordingRunner();
+    const orchestrator = new Orchestrator(store, runner, receipts);
+    const mockReceipts = {
+      get: (id: string) =>
+        id === "live-pass-1"
+          ? { receipt: { payload: { report: { verdict: "PASS" } } } }
+          : undefined,
+      publicKey: () => undefined,
+      verify: () => ({ valid: true }),
+    };
+
+    const server = createApiServer({
+      store,
+      inspection: new InspectionService(inspectionGateway),
+      orchestrator,
+      bearerToken: "t".repeat(32),
+      receipts: mockReceipts,
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing server address");
+
+    try {
+      const crawlerHeaders = {
+        accept: "text/html",
+        "x-forwarded-host": "proofrunner.org",
+        "x-forwarded-proto": "https",
+      };
+
+      const demoCases = [
+        {
+          kind: "passed",
+          path: "/examples/passed",
+          title: "[DEMO] PASS Source Reference (demo-fixed) · ProofRunner",
+          description: "Static demo reference for ever-guild/proof-runner-demo at tag demo-fixed. No ProofRunner execution or signed receipt was issued.",
+        },
+        {
+          kind: "broken",
+          path: "/examples/broken",
+          title: "[DEMO] FAIL Source Reference (demo-broken) · ProofRunner",
+          description: "Static demo reference for ever-guild/proof-runner-demo at tag demo-broken. No ProofRunner execution or signed receipt was issued.",
+        },
+        {
+          kind: "timeout",
+          path: "/examples/timeout",
+          title: "[DEMO] TIMEOUT Simulation · ProofRunner",
+          description: "Simulated execution-limit example. No repository execution or signed receipt was issued.",
+        },
+        {
+          kind: "system-error",
+          path: "/examples/system-error",
+          title: "[DEMO] SYSTEM_ERROR Simulation · ProofRunner",
+          description: "Simulated runner-error example. No repository execution or signed receipt was issued.",
+        },
+        {
+          kind: "inconclusive",
+          path: "/examples/inconclusive",
+          title: "[DEMO] INCONCLUSIVE Simulation · ProofRunner",
+          description: "Simulated incomplete-result example. No repository execution or signed receipt was issued.",
+        },
+      ] as const;
+
+      for (const demo of demoCases) {
+        const demoResponse = await fetch(`http://127.0.0.1:${address.port}${demo.path}`, {
+          headers: crawlerHeaders,
+        });
+        expect(demoResponse.status).toBe(200);
+        expect(demoResponse.headers.get("content-type")).toContain("text/html");
+        const demoHtml = await demoResponse.text();
+        expect(demoHtml).toContain(`<meta property="og:title" content="${demo.title}" />`);
+        expect(demoHtml).toContain(`<meta property="og:description" content="${demo.description}" />`);
+        expect(demoHtml).toContain(`<meta property="og:url" content="https://proofrunner.org${demo.path}" />`);
+        expect(demoHtml).toContain('<meta property="og:type" content="website" />');
+        expect(demoHtml).not.toContain('src="/src/main.tsx"');
+        if (demo.kind === "timeout" || demo.kind === "system-error" || demo.kind === "inconclusive") {
+          expect(demoHtml).not.toMatch(/proof-runner-demo|demo-(timeout|system-error|inconclusive)|[a-f0-9]{40}/i);
+        }
+      }
+
+      // 2. Unknown receipt returns 404
+      const missingResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/unknown-id-999`, {
+        headers: crawlerHeaders,
+      });
+      expect(missingResponse.status).toBe(404);
+      expect(missingResponse.headers.get("content-type")).toContain("text/html");
+      const missingHtml = await missingResponse.text();
+      expect(missingHtml).toContain('<meta property="og:title" content="Receipt Not Found · ProofRunner" />');
+      expect(missingHtml).toContain('<meta property="og:description" content="Verification receipt unknown-id-999 was not found." />');
+      expect(missingHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/unknown-id-999" />');
+
+      const missingDemoResponse = await fetch(`http://127.0.0.1:${address.port}/examples/unknown-demo`, {
+        headers: crawlerHeaders,
+      });
+      expect(missingDemoResponse.status).toBe(404);
+      const missingDemoHtml = await missingDemoResponse.text();
+      expect(missingDemoHtml).toContain('<meta property="og:title" content="Receipt Not Found · ProofRunner" />');
+      expect(missingDemoHtml).toContain('<meta property="og:url" content="https://proofrunner.org/examples/unknown-demo" />');
+
+      // 3. Live receipt
+      const liveResponse = await fetch(`http://127.0.0.1:${address.port}/receipts/live-pass-1`, {
+        headers: crawlerHeaders,
+      });
+      expect(liveResponse.status).toBe(200);
+      expect(liveResponse.headers.get("content-type")).toContain("text/html");
+      const liveHtml = await liveResponse.text();
+      expect(liveHtml).toContain('<meta property="og:title" content="Verification Receipt live-pass-1 · PASS · ProofRunner" />');
+      expect(liveHtml).toContain('<meta property="og:description" content="Signed verification evidence receipt for run live-pass-1 with verdict PASS." />');
+      expect(liveHtml).toContain('<meta property="og:url" content="https://proofrunner.org/receipts/live-pass-1" />');
+
+    } finally {
+      orchestrator.stop();
+      store.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });
