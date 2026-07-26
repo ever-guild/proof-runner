@@ -2,28 +2,57 @@
 
 Independent execution verification for agent-generated software.
 
-Status: the checked-in web flow is a demo preview. API, receipt, HTTPS, and
-OKX.AI availability must be confirmed against the deployed service.
+Status: The checked-in repository provides a local web preview and frozen
+contract. Public HTTP endpoints, signed receipts, OKX.AI, and paid x402 are not
+live. Those are separate deployment and approval gates.
 
 ## Human and agent surfaces
 
-- Human interface: /
+- Human UI: /
 - Agent contract: /skill.md
-- Demo PASS receipt: /examples/passed
-- Demo FAIL receipt: /examples/broken
+- Synthetic demo PASS receipt: /examples/passed
+- Synthetic demo FAIL receipt: /examples/broken
 
-## Frozen API routes
+## Capabilities and API routes
 
+Launch capabilities:
+- inspect_repository (free)
+- verify_repository (configured free / paid x402 mode when enabled)
+- verify_receipt (free)
+
+Frozen API routes:
 - Inspect repository: POST /api/inspect
-- Start verification: POST /api/verify
-- Run status: GET /api/runs/{id}
-- Receipt JSON: GET /api/receipts/{id}
+- Start verification: POST /api/verify (requires Idempotency-Key header)
+- Poll run status: GET /api/runs/{id}
+- Signed receipt JSON (when issued): GET /api/receipts/{id}
+- Receipt public key: GET /api/receipt-keys/{keyId}
+- Verify receipt: POST /api/receipts/verify
+- A2MCP Inspect: POST /a2mcp/inspect_repository
+- A2MCP Verify: POST /a2mcp/verify_repository
 
-## MVP limitations
+## Signed receipt JSON & Verification Flow
 
-- Canonical public GitHub repositories only
-- Node.js and TypeScript only
-- npm and pnpm lockfiles only
-- No repository secrets or user-provided shell commands
-- PASS covers only the checks named in the receipt
-- Timeout and infrastructure failures are INCONCLUSIVE, never FAIL
+When issued, a receipt is a signed envelope with `contractVersion` `"1.0"`,
+`payload` (`id`, `report`, and `createdAt`), `canonicalization`
+`JCS-RFC8785`, `payloadHash`, `signatureAlgorithm`, `keyId`, and `signature`.
+The report carries the run ID, repository URL, resolved commit and ref, pinned
+skill, normalized checks, verdict, duration, and completion time. A receipt is
+not available until the public service has executed a run and issued it.
+
+To verify a receipt:
+1. Retrieve receipt via `GET /api/receipts/{id}`.
+2. Extract `keyId` from receipt (`receipt.keyId`).
+3. Fetch public key via `GET /api/receipt-keys/{keyId}`.
+4. Verify receipt via `POST /api/receipts/verify` or verify locally:
+   a. Canonicalize `receipt.payload` using JCS (RFC 8785).
+   b. Compute SHA-256 digest of canonicalized payload and compare to `receipt.payloadHash`.
+   c. Verify `receipt.signature` using Ed25519 over canonicalized payload bytes against fetched `publicKey`.
+
+## MVP limitations & verdict rules
+
+- Canonical public GitHub HTTPS repositories only.
+- Node.js and TypeScript with npm or pnpm lockfile only.
+- No secrets or custom user shell commands.
+- PASS: All pinned skill verification checks passed.
+- FAIL: Code executed and one or more checks failed.
+- INCONCLUSIVE: Timeout, network error, or system error. Timeout is never FAIL.

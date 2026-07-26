@@ -22,7 +22,9 @@ ownership and prepare a host-only `deployment/.env.production`:
 - `PROOF_RUNNER_RECEIPT_PRIVATE_KEY`: dedicated Ed25519 receipt key, never a
   wallet key;
 - `PROOF_RUNNER_RECEIPT_KEY_ID` and any retained public verification keys;
-- `PROOF_RUNNER_DOMAIN`: the public DNS name;
+- `PROOF_RUNNER_DOMAIN`: the public DNS hostname only, such as
+  `proofrunner.example.com`; do not include `https://`, a path, query, or
+  fragment;
 - `PROOF_RUNNER_BACKUP_PATH`: an encrypted, provider-retained host path outside
   the Docker volume; it is mounted only by the backup service.
 
@@ -87,6 +89,11 @@ docker build --tag proof-runner-node:1 \
   --file apps/runner/docker/Dockerfile apps/runner/docker
 docker compose --env-file deployment/.env.production -f deployment/compose.yaml up -d --build
 ```
+
+Compose also derives the web image's canonical `PUBLIC_BASE_URL` build argument
+from `PROOF_RUNNER_DOMAIN`. The web image build fails when that public HTTPS
+origin is missing or invalid, so the shipped `index.html`, `robots.txt`, and
+`sitemap.xml` cannot silently omit deployment metadata.
 
 The runner image supplies its immutable skill and sandbox configuration through
 a read-only Docker volume shared with its disposable sibling containers. This

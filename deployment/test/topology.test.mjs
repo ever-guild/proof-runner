@@ -7,11 +7,54 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { build } from "vite";
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), "utf8");
 const execFile = promisify(execFileCallback);
+const rootDirectory = fileURLToPath(new URL("../../", import.meta.url));
+const composePath = join(rootDirectory, "deployment", "compose.yaml");
+const invalidPublicOrigins = [
+  "",
+  "   ",
+  "///",
+  "http://proof-runner.example",
+  "https://localhost",
+  "https://127.0.0.1",
+  "https://[::1]",
+  "https://proof-runner.example/path",
+  "https://proof-runner.example?q=1",
+  "https://proof-runner.example#fragment",
+  "https://user:pass@proof-runner.example",
+  "https://https://proof-runner.example",
+];
 const service = (compose, name) =>
   compose.match(new RegExp(`^  ${name}:\\n[\\s\\S]*?(?=^  \\w|^networks:)`, "m"))?.[0] ?? "";
+const composeEnvironment = (domain) => {
+  const environment = {
+    ...process.env,
+    PROOF_RUNNER_BEARER_TOKEN: "test-token",
+    PROOF_RUNNER_RECEIPT_KEY_ID: "test-key",
+    PROOF_RUNNER_RECEIPT_PRIVATE_KEY: "test-private-key",
+    PROOF_RUNNER_BACKUP_PATH: join(tmpdir(), "proof-runner-backups"),
+  };
+  if (domain === undefined) {
+    delete environment.PROOF_RUNNER_DOMAIN;
+  } else {
+    environment.PROOF_RUNNER_DOMAIN = domain;
+  }
+  return environment;
+};
+const renderCompose = async (domain) => {
+  const { stdout } = await execFile(
+    "docker",
+    ["compose", "-f", composePath, "config", "--format", "json"],
+    {
+      cwd: rootDirectory,
+      env: composeEnvironment(domain),
+    },
+  );
+  return JSON.parse(stdout);
+};
 
 test("the HTTPS edge routes public API, A2MCP, and health requests to the API service", async () => {
   const caddyfile = await read("Caddyfile");
@@ -58,6 +101,105 @@ test("Compose gives only the API egress while keeping the worker private and bac
   assert.match(compose, /PROOF_RUNNER_BACKUP_PATH.*:\/backups/);
   assert.match(compose, /backup-sqlite\.mjs/);
   assert.match(compose, /PROOF_RUNNER_DOCKER_ASSET_CONTAINER: self/);
+});
+
+test("production web build requires and receives the canonical HTTPS origin", async () => {
+  const compose = await read("compose.yaml");
+  const dockerfile = await read("Dockerfile.web");
+  const web = service(compose, "web");
+
+  assert.match(
+    web,
+    /PUBLIC_BASE_URL: "https:\/\/\$\{PROOF_RUNNER_DOMAIN:\?set the public HTTPS domain\}"/,
+  );
+  assert.match(dockerfile, /^ARG PUBLIC_BASE_URL$/m);
+  assert.match(dockerfile, /^ENV PUBLIC_BASE_URL=\$PUBLIC_BASE_URL$/m);
+
+  const requiredOrigin = dockerfile.indexOf('RUN test -n "$PUBLIC_BASE_URL"');
+  const dependencyInstall = dockerfile.indexOf("RUN pnpm install --frozen-lockfile");
+  const viteBuild = dockerfile.indexOf("RUN pnpm exec vite build");
+  assert.ok(requiredOrigin >= 0, "The production image must reject a missing canonical origin");
+  assert.ok(dependencyInstall > requiredOrigin, "A missing canonical origin must fail before dependencies install");
+  assert.ok(viteBuild > requiredOrigin, "The canonical origin must be required before Vite builds the image");
+});
+
+test("Compose renders a host-only domain and exposes scheme mistakes to build validation", async () => {
+  const validConfig = await renderCompose("proof-runner.example");
+  assert.equal(
+    validConfig.services.web.build.args.PUBLIC_BASE_URL,
+    "https://proof-runner.example",
+  );
+
+  const invalidConfig = await renderCompose("https://proof-runner.example");
+  const invalidOrigin = invalidConfig.services.web.build.args.PUBLIC_BASE_URL;
+  assert.equal(invalidOrigin, "https://https://proof-runner.example");
+  assert.ok(invalidPublicOrigins.includes(invalidOrigin));
+
+  await assert.rejects(
+    renderCompose(undefined),
+    /PROOF_RUNNER_DOMAIN[\s\S]*set the public HTTPS domain/,
+  );
+});
+
+test("production web artifact publishes one canonical origin in HTML, robots, and sitemap", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "proof-runner-web-build-"));
+  const outputDirectory = join(directory, "site");
+  const origin = "https://proof-runner.example";
+  const previousOrigin = process.env.PUBLIC_BASE_URL;
+
+  try {
+    for (const invalidOrigin of invalidPublicOrigins) {
+      process.env.PUBLIC_BASE_URL = invalidOrigin;
+      await assert.rejects(
+        build({
+          root: rootDirectory,
+          configFile: join(rootDirectory, "vite.config.ts"),
+          build: {
+            outDir: outputDirectory,
+            emptyOutDir: true,
+          },
+          logLevel: "silent",
+        }),
+        /Invalid PUBLIC_BASE_URL/,
+      );
+    }
+
+    process.env.PUBLIC_BASE_URL = origin;
+    await build({
+      root: rootDirectory,
+      configFile: join(rootDirectory, "vite.config.ts"),
+      build: {
+        outDir: outputDirectory,
+        emptyOutDir: true,
+      },
+      logLevel: "silent",
+    });
+
+    const html = await readFile(join(outputDirectory, "index.html"), "utf8");
+    const robots = await readFile(join(outputDirectory, "robots.txt"), "utf8");
+    const sitemap = await readFile(join(outputDirectory, "sitemap.xml"), "utf8");
+
+    assert.match(html, new RegExp(`<link rel="canonical" href="${origin}/" />`));
+    assert.match(html, new RegExp(`<meta property="og:url" content="${origin}/" />`));
+    assert.match(robots, new RegExp(`^Sitemap: ${origin}/sitemap\\.xml$`, "m"));
+
+    const metadataUrls = [
+      html.match(/<link rel="canonical" href="(https:\/\/[^"]+)" \/>/)?.[1],
+      html.match(/<meta property="og:url" content="(https:\/\/[^"]+)" \/>/)?.[1],
+      robots.match(/^Sitemap: (https:\/\/\S+)$/m)?.[1],
+      ...[...sitemap.matchAll(/<loc>(https:\/\/[^<]+)<\/loc>/g)].map((match) => match[1]),
+    ];
+    assert.ok(metadataUrls.every(Boolean), "Every public metadata URL must be absolute");
+    const publishedOrigins = [...new Set(metadataUrls.map((url) => new URL(url).origin))];
+    assert.deepEqual(publishedOrigins, [origin]);
+  } finally {
+    if (previousOrigin === undefined) {
+      delete process.env.PUBLIC_BASE_URL;
+    } else {
+      process.env.PUBLIC_BASE_URL = previousOrigin;
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("runner image carries the pinned skill and host-daemon-visible asset volume", async () => {

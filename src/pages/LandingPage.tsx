@@ -73,11 +73,11 @@ export function LandingPage() {
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-emerald-300">independently verified.</span>
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            ProofRunner executes an exact Git commit in an isolated environment using a pinned verification skill and returns a reproducible PASS / FAIL receipt.
+            ProofRunner is designed to verify an exact Git commit in an isolated environment using a pinned verification skill. Public execution and signed receipts remain unavailable until deployment; the linked example is synthetic demo data.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Verify a repository</a></Button>
-            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View demo receipt</Link></Button>
+            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View synthetic demo</Link></Button>
           </div>
           <p className="mt-6 text-sm text-slate-300 font-medium">
             <a href="/skill.md" className="hover:text-indigo-300 transition-colors">Using an AI agent? Get the skill file →</a>
@@ -116,7 +116,7 @@ export function LandingPage() {
                 <div className="space-y-1.5">
                   <label htmlFor="git-ref" className="text-sm font-semibold text-slate-200">Git reference</label>
                   <div className="grid grid-cols-[9rem_1fr] gap-3">
-                    <select id="git-ref-type" name="gitRefType" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <select id="git-ref-type" name="gitRefType" aria-label="Git reference type" value={gitRefType} onChange={(event) => setGitRefType(event.target.value as "branch" | "tag" | "commit")} className="h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
                       <option value="branch">Branch</option>
                       <option value="tag">Tag</option>
                       <option value="commit">Commit SHA</option>
@@ -236,7 +236,7 @@ export function LandingPage() {
           <div className="flex-1 space-y-6">
             <Badge variant="queued" showIcon={false} className="mb-2 border-white/20 text-slate-300"><Bot className="w-3 h-3 mr-2 inline text-indigo-400" /> A2MCP</Badge>
             <h2 className="text-3xl font-bold text-white">Built for agents, not just browsers</h2>
-            <p className="text-slate-300 leading-relaxed">The frozen A2MCP contract lets agents inspect a repository, start a run, poll normalized status, and consume a receipt as structured JSON. Public OKX.AI availability and paid x402 mode are not claimed until they are live.</p>
+            <p className="text-slate-300 leading-relaxed">The frozen A2MCP contract defines how agents will inspect a repository, start a run, poll normalized status, and consume a receipt as structured JSON once the public service is live. Public OKX.AI availability and paid x402 mode are not claimed until their separate gates are complete.</p>
             <div className="flex gap-4 pt-4">
               <Button asChild variant="secondary" className="font-semibold text-white border-white/20"><a href="/skill.md">Open skill.md</a></Button>
               <Button asChild variant="ghost" className="font-semibold text-slate-300"><a href="/llms.txt">Open llms.txt</a></Button>
