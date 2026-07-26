@@ -11,9 +11,7 @@ permissions:
 jobs:
   check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    # Use an isolated hosted runner: the shared self-hosted runner can retain
-    # stalled Playwright processes between jobs.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, everguild]
     # A stalled test process must not leave a PR permanently pending.
     # The complete suite normally finishes in under two minutes.
     timeout-minutes: 15
