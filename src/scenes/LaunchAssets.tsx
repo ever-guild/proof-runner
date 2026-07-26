@@ -34,7 +34,7 @@ export function OpenGraphBanner() {
           <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
           <div className="flex items-center gap-3">
             <Server className="w-8 h-8 text-violet-400" />
-            <span className="text-xl font-medium text-slate-300">Secure ASP Sandbox</span>
+            <span className="text-xl font-medium text-slate-300">Isolated execution</span>
           </div>
           <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
           <div className="flex items-center gap-3">
@@ -65,7 +65,7 @@ export function XBanner() {
       <div className="relative z-10 w-[400px] h-[280px] bg-black/40 border border-white/10 rounded-2xl shadow-glass backdrop-blur-xl p-8 flex flex-col justify-between">
          <div className="flex items-center gap-3">
             <ShieldCheck className="w-8 h-8 text-pass" />
-            <span className="text-2xl font-semibold text-slate-200">Receipt Generated</span>
+            <span className="text-2xl font-semibold text-slate-200">Receipt preview</span>
          </div>
          <div className="space-y-4">
            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SceneErrorEdgeCases, EdgeCaseErrorType } from './SceneErrorEdgeCases';
+import { SceneErrorEdgeCases } from './SceneErrorEdgeCases';
 
 const meta = {
   title: 'Scenes/ErrorEdgeCases',
@@ -19,6 +19,7 @@ const meta = {
         'oversized_repo',
         'payment_failure',
         'expired_logs',
+        'unsupported',
       ],
     },
   },
@@ -66,5 +67,11 @@ export const PaymentFailure: Story = {
 export const ExpiredLogs: Story = {
   args: {
     errorType: 'expired_logs',
+  },
+};
+
+export const Unsupported: Story = {
+  args: {
+    errorType: 'unsupported',
   },
 };

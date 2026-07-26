@@ -1,4 +1,3 @@
-import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { FormField } from "../components/ui/form-field"
@@ -13,7 +12,7 @@ export function Scene1Enter({ onNext }: { onNext: () => void }) {
           Run it. <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-indigo-500">Prove it.</span>
         </h1>
         <p className="text-lg md:text-xl text-slate-400 max-w-lg leading-relaxed">
-          Autonomous execution and cryptographic receipts for your AI agent skills. Verify behavior instantly in our secure sandbox.
+          Inspect public repositories, pin an immutable commit, and request evidence for your AI agent skills.
         </p>
         
         {/* ASP Card */}
@@ -22,9 +21,9 @@ export function Scene1Enter({ onNext }: { onNext: () => void }) {
             <Server className="w-5 h-5 text-violet-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-200">ASP Network Enabled</h3>
+            <h2 className="text-sm font-semibold text-slate-200">Configured runner</h2>
             <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Execution is routed to our global Application Service Provider network for lowest latency.
+              ProofRunner records the requested repository and resolved commit before dispatching work to its configured runner.
             </p>
           </div>
         </div>
@@ -53,7 +52,7 @@ export function Scene1Enter({ onNext }: { onNext: () => void }) {
             <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
               <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
               <p>
-                By proceeding, you agree to run untrusted code in an ephemeral sandbox. Code will have no access to the host network.
+                Verification is subject to the runner configuration and repository limits. Do not treat a result as a guarantee that code is safe or defect-free.
               </p>
             </div>
           </div>

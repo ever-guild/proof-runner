@@ -1,9 +1,8 @@
-import * as React from "react"
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert"
 import { Terminal } from "../components/ui/terminal"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
-import { AlertCircle, HelpCircle, Timer, AlertOctagon, ArrowLeft, RefreshCw, XCircle } from "lucide-react"
+import { AlertCircle, HelpCircle, Timer, AlertOctagon, ArrowLeft, RefreshCw, XCircle, CircleOff } from "lucide-react"
 
 export type EdgeCaseErrorType = 
   | 'inconclusive'
@@ -12,7 +11,8 @@ export type EdgeCaseErrorType =
   | 'invalid_ref'
   | 'oversized_repo'
   | 'payment_failure'
-  | 'expired_logs';
+  | 'expired_logs'
+  | 'unsupported';
 
 export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType: EdgeCaseErrorType, onRetry?: () => void, onBack?: () => void }) {
   const config = {
@@ -34,21 +34,21 @@ export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType:
       badgeVariant: "timeout" as const,
       badgeText: "TIMEOUT",
       title: "Execution Timeout",
-      description: "The runner exceeded the maximum allowed execution time of 180 seconds.",
+      description: "The configured execution time limit was reached before verification completed.",
       icon: <Timer className="w-4 h-4" />,
       logs: [
         "$ proofrunner execute --skill heavy-test",
         "> Running heavy test suite...",
         "Executing tests (1/100)...",
         "Executing tests (42/100)...",
-        "ERR! Process terminated: Timeout (180s) reached."
+        "ERR! Process terminated: configured timeout reached."
       ]
     },
     system_error: {
       badgeVariant: "system_error" as const,
       badgeText: "SYSTEM ERROR",
       title: "Internal System Error",
-      description: "An unexpected error occurred in our infrastructure. Our engineers have been notified.",
+      description: "An unexpected runner or infrastructure error prevented a conclusive result.",
       icon: <AlertOctagon className="w-4 h-4" />,
       logs: [
         "$ proofrunner prepare-environment",
@@ -72,36 +72,48 @@ export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType:
       badgeVariant: "fail" as const,
       badgeText: "OVERSIZED",
       title: "Repository Too Large",
-      description: "The repository exceeds the maximum allowed size (500MB) for execution.",
+      description: "The repository exceeds the configured size limit for execution.",
       icon: <XCircle className="w-4 h-4" />,
       logs: [
         "$ git clone https://github.com/massive/repo.git",
         "> Fetching objects...",
-        "Receiving objects: 100% (4123/4123), 1.2 GiB | 45.00 MiB/s",
-        "ERR! Clone aborted: repository size exceeds 500MB quota."
+        "Receiving objects: 100% (4123/4123), size limit exceeded.",
+        "ERR! Clone aborted: repository exceeds the configured limit."
       ]
     },
     payment_failure: {
       badgeVariant: "fail" as const,
       badgeText: "PAYMENT FAILED",
       title: "Payment Required",
-      description: "We could not verify the payment for this execution. Please check your billing settings.",
+      description: "This launch-flow state is a design preview; payments are not configured in the demo.",
       icon: <AlertCircle className="w-4 h-4" />,
       logs: [
         "$ proofrunner verify-payment",
-        "> Checking ASP balance...",
-        "ERR! Insufficient funds or payment declined."
+        "> Payment handling is unavailable in this demo.",
+        "ERR! No payment provider is configured."
       ]
     },
     expired_logs: {
       badgeVariant: "queued" as const,
       badgeText: "EXPIRED",
       title: "Logs Expired",
-      description: "The raw execution logs for this run have expired and are no longer available. Only the cryptographic receipt remains.",
+      description: "This design state illustrates unavailable logs; retention depends on the deployment configuration.",
       icon: <Timer className="w-4 h-4" />,
       logs: [
-        "Logs are purged after 30 days for privacy and storage reasons.",
-        "To view details, you must run the verification again."
+        "Log retention is not available for this demo state.",
+        "Run another verification to produce fresh evidence."
+      ]
+    },
+    unsupported: {
+      badgeVariant: "inconclusive" as const,
+      badgeText: "UNSUPPORTED",
+      title: "Repository Not Supported",
+      description: "ProofRunner could not select a supported verification skill from the repository metadata.",
+      icon: <CircleOff className="w-4 h-4" />,
+      logs: [
+        "$ proofrunner inspect https://github.com/example/repository",
+        "> Reading repository metadata...",
+        "ERR! NO_SUPPORTED_SKILL: no supported verification profile was found."
       ]
     }
   };
@@ -118,7 +130,7 @@ export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType:
         <Badge variant={badgeVariant}>{badgeText}</Badge>
       </div>
 
-      <Alert variant={badgeVariant === "fail" || badgeVariant === "system_error" ? "destructive" : badgeVariant as any}>
+      <Alert variant={badgeVariant === "fail" ? "destructive" : badgeVariant === "system_error" ? "system_error" : badgeVariant === "timeout" ? "timeout" : badgeVariant === "inconclusive" ? "inconclusive" : "default"}>
         {icon}
         <AlertTitle>{badgeText}</AlertTitle>
         <AlertDescription>

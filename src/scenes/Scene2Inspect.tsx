@@ -12,7 +12,7 @@ export function Scene2Inspect({ onNext }: { onNext: () => void }) {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-xl">Repository Inspection</CardTitle>
+              <CardTitle className="text-xl">Repository Inspection Demo</CardTitle>
               <CardDescription className="text-sm mt-1">
                 ever-guild/proof-runner
               </CardDescription>
@@ -27,7 +27,7 @@ export function Scene2Inspect({ onNext }: { onNext: () => void }) {
               <GitBranch className="w-4 h-4 text-slate-400" />
               <span className="font-medium text-slate-200">main</span>
             </div>
-            <span className="text-slate-500 font-mono text-xs bg-slate-900 px-2 py-1 rounded">Commit: a1b2c3d</span>
+            <span className="text-slate-300 font-mono text-xs bg-slate-900 px-2 py-1 rounded">Commit: a1b2c3d</span>
           </div>
 
           <Separator className="bg-white/10" />
@@ -42,7 +42,7 @@ export function Scene2Inspect({ onNext }: { onNext: () => void }) {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-100">Lint & Test Proof</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm">Runs ESLint and Vitest to prove codebase stability and correctness.</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm">Illustrates the selected verification profile for this demo flow.</p>
                 </div>
               </div>
               <Button variant="primary" size="default" onClick={onNext} className="w-full sm:w-auto shrink-0 group">

@@ -45,7 +45,7 @@ const Terminal = React.forwardRef<HTMLDivElement, TerminalProps>(
             </button>
           )}
         </div>
-        <div className="space-y-1.5 overflow-auto">
+        <div className="space-y-1.5 overflow-auto" role="log" aria-label="Execution log" tabIndex={0}>
           {collapsible && !isExpanded && logs.length > 3 && (
             <div className="text-slate-500 italic mb-2">... {logs.length - 3} previous lines hidden ...</div>
           )}

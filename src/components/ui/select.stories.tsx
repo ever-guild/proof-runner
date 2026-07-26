@@ -34,6 +34,7 @@ export const Default: Story = {
     options: options,
     name: 'gitRefType',
     id: 'git-ref-type',
+    ariaLabel: 'Git reference type',
   },
   render: (args) => {
     const [val, setVal] = React.useState('branch');

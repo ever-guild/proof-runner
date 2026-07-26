@@ -118,6 +118,7 @@ export function LandingPage() {
                 <div className="space-y-2">
                   <label htmlFor="git-ref" className="text-base font-semibold text-slate-200">Git reference</label>
                   <div className="grid grid-cols-[11rem_1fr] gap-4">
+                    <label htmlFor="git-ref-type" className="sr-only">Git reference type</label>
                     <Select 
                       id="git-ref-type" 
                       name="gitRefType" 
@@ -130,6 +131,7 @@ export function LandingPage() {
                       ]}
                       className="h-14 text-base"
                     />
+                    <label htmlFor="git-ref" className="sr-only">Git reference value</label>
                     <Input id="git-ref" name="gitRef" required placeholder={gitRefType === "commit" ? "Full commit SHA" : `Enter ${gitRefType} name`} value={gitRef} onChange={(event) => setGitRef(event.target.value)} className="h-14 text-base px-5" />
                   </div>
                 </div>
