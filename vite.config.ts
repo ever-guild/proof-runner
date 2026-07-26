@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
@@ -12,27 +12,33 @@ import {
   transformHtmlMetadata,
   generateRobotsTxt,
   generateSitemapXml,
+  requirePublicMetadataOutputDirectory,
 } from './src/lib/public-metadata';
 
 const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
-function publicMetadataPlugin() {
+function publicMetadataPlugin(): Plugin {
   return {
     name: 'public-metadata',
     transformIndexHtml(html: string) {
       return transformHtmlMetadata(html, process.env.PUBLIC_BASE_URL);
     },
-    closeBundle() {
-      const outDir = path.join(dirname, 'dist');
-      if (fs.existsSync(outDir)) {
-        const robotsPath = path.join(outDir, 'robots.txt');
-        fs.writeFileSync(robotsPath, generateRobotsTxt(process.env.PUBLIC_BASE_URL), 'utf-8');
+    writeBundle(outputOptions) {
+      const outDir = path.resolve(
+        dirname,
+        requirePublicMetadataOutputDirectory(outputOptions.dir),
+      );
+      if (!fs.existsSync(outDir)) {
+        throw new Error(`Public metadata output directory does not exist: ${outDir}`);
+      }
 
-        const sitemapContent = generateSitemapXml(process.env.PUBLIC_BASE_URL);
-        if (sitemapContent) {
-          const sitemapPath = path.join(outDir, 'sitemap.xml');
-          fs.writeFileSync(sitemapPath, sitemapContent, 'utf-8');
-        }
+      const robotsPath = path.join(outDir, 'robots.txt');
+      fs.writeFileSync(robotsPath, generateRobotsTxt(process.env.PUBLIC_BASE_URL), 'utf-8');
+
+      const sitemapContent = generateSitemapXml(process.env.PUBLIC_BASE_URL);
+      if (sitemapContent) {
+        const sitemapPath = path.join(outDir, 'sitemap.xml');
+        fs.writeFileSync(sitemapPath, sitemapContent, 'utf-8');
       }
     },
   };

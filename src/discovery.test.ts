@@ -8,6 +8,7 @@ import {
   transformHtmlMetadata,
   generateRobotsTxt,
   generateSitemapXml,
+  requirePublicMetadataOutputDirectory,
 } from "./lib/public-metadata"
 
 const rootDir = path.resolve(__dirname, "..")
@@ -155,14 +156,28 @@ describe("agent discovery & public metadata files", () => {
   })
 
   describe("PUBLIC_BASE_URL origin validation and metadata generation", () => {
+    it("requires an explicit build output directory for public metadata", () => {
+      expect(() => requirePublicMetadataOutputDirectory(undefined)).toThrow(
+        /requires an output directory/,
+      )
+      expect(() => requirePublicMetadataOutputDirectory("")).toThrow(
+        /requires an output directory/,
+      )
+      expect(requirePublicMetadataOutputDirectory("/tmp/public-site")).toBe(
+        "/tmp/public-site",
+      )
+    })
+
     it("validates and normalizes valid HTTPS public origins", () => {
       expect(parsePublicOrigin("https://proof-runner.example")).toBe("https://proof-runner.example")
       expect(parsePublicOrigin("https://proof-runner.example/")).toBe("https://proof-runner.example")
       expect(parsePublicOrigin("  https://proof-runner.example/  ")).toBe("https://proof-runner.example")
       expect(parsePublicOrigin("https://proof-runner.example:8443")).toBe("https://proof-runner.example:8443")
       expect(parsePublicOrigin(undefined)).toBeNull()
-      expect(parsePublicOrigin("")).toBeNull()
-      expect(parsePublicOrigin("   ")).toBeNull()
+      expect(parsePublicOrigin(null)).toBeNull()
+      expect(() => parsePublicOrigin("")).toThrow(/must not be blank/)
+      expect(() => parsePublicOrigin("   ")).toThrow(/must not be blank/)
+      expect(() => parsePublicOrigin("///")).toThrow(/must be a valid URL string/)
     })
 
     it("rejects non-public hostnames including localhost, .localhost, 127.0.0.0/8 IPv4 loopback, and ::1 IPv6 loopback", () => {

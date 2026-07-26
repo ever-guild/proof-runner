@@ -12,13 +12,21 @@ function isNonPublicHost(hostname: string): boolean {
   return false
 }
 
+export function requirePublicMetadataOutputDirectory(outputDirectory?: string): string {
+  if (!outputDirectory) {
+    throw new Error("Public metadata build requires an output directory.")
+  }
+  return outputDirectory
+}
+
 export function parsePublicOrigin(rawOrigin?: string | null): string | null {
-  if (!rawOrigin) return null
+  if (rawOrigin == null) return null
   const trimmed = rawOrigin.trim()
-  if (!trimmed) return null
+  if (!trimmed) {
+    throw new Error(`Invalid PUBLIC_BASE_URL "${rawOrigin}": must not be blank.`)
+  }
 
   const urlCandidate = trimmed.replace(/\/+$/, "")
-  if (!urlCandidate) return null
 
   let parsed: URL
   try {
