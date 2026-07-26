@@ -217,7 +217,10 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
         await new Promise((r) => setTimeout(r, 20));
 
         // Find the oracle for this run
-        const mapping = runOracleMap.get(runId);
+        const mapping =
+          runOracleMap.get(runId) ??
+          runOracleMap.get(`e2e-${verify.resolvedRef?.value}`) ??
+          Array.from(runOracleMap.values())[0];
         if (!mapping) {
           return {
             status: "SYSTEM_ERROR" as const,
@@ -301,6 +304,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
   it("end-to-end PASS case: submit → dispatch → result → receipt", async () => {
     const caseId = "prvc.synthetic.node.core-pass-001";
     const oracle = caseOracles.get(caseId)!;
+    runOracleMap.set(`e2e-${caseId}`, { oracle, variant: "default" });
 
     // Submit
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
@@ -321,8 +325,6 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
     expect(verifyRes.status).toBe(202);
     const { run } = (await verifyRes.json()) as any;
     const runId = run.id;
-
-    // Register oracle mapping for this runId
     runOracleMap.set(runId, { oracle, variant: "default" });
 
     // Wait for runner to process
@@ -344,6 +346,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
   it("end-to-end FAIL case: test failure detected", async () => {
     const caseId = "prvc.synthetic.node.core-fail-test-003";
     const oracle = caseOracles.get(caseId)!;
+    runOracleMap.set(`e2e-${caseId}`, { oracle, variant: "default" });
 
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
       method: "POST",
@@ -376,6 +379,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
   it("end-to-end SYSTEM_ERROR case: sandbox policy block", async () => {
     const caseId = "prvc.synthetic.node.sandbox-secret-env-017";
     const oracle = caseOracles.get(caseId)!;
+    runOracleMap.set(`e2e-${caseId}`, { oracle, variant: "default" });
 
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
       method: "POST",

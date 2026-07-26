@@ -1,0 +1,8 @@
+case_id: prvc.synthetic.sandbox.node.resource-memory-cgroup-v1
+schema_version: prvc.oracle/v1
+variants:
+  default:
+    expected:
+      reason_code: MEMORY_LIMIT
+      terminal_status: RESOURCE_EXHAUSTED
+      verdict: INCONCLUSIVE

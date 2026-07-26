@@ -17,7 +17,7 @@ describe("PRVC Validator with Ajv JSON Schema Engine", () => {
   it("should validate a compliant PRVC case object with matching JCS RFC 8785 hash", () => {
     const rawCase = {
       schema_version: "prvc.case/v1" as const,
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       title: "Core PASS execution",
       suite: ["smoke", "synthetic"],
       visibility: "public" as const,
@@ -51,7 +51,7 @@ describe("PRVC Validator with Ajv JSON Schema Engine", () => {
   it("should reject a case object with tampered payload and invalid JCS hash", () => {
     const caseObj: PrvcCase = {
       schema_version: "prvc.case/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       title: "Tampered title",
       suite: ["smoke", "synthetic"],
       visibility: "public",
@@ -80,7 +80,7 @@ describe("PRVC Validator with Ajv JSON Schema Engine", () => {
   it("should validate a compliant PRVC oracle object and vocabulary values", () => {
     const oracleObj: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       variants: {
         default: {
           expected: {
@@ -100,7 +100,7 @@ describe("PRVC Validator with Ajv JSON Schema Engine", () => {
   it("should reject an oracle object with invalid terminal status or reason code", () => {
     const oracleObj: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.invalid-001",
+      case_id: "prvc.synthetic.node.javascript.invalid-001",
       variants: {
         default: {
           expected: {

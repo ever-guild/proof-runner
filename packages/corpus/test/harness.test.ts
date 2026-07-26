@@ -18,7 +18,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should evaluate report matching expected PASS oracle with stages and minimum executed checks", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       variants: {
         default: {
           expected: {
@@ -56,7 +56,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should fail evaluateReport when required passing test is missing or minimum executed threshold fails", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       variants: {
         default: {
           expected: {
@@ -94,7 +94,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should detect discrepancy when expected FAIL receives PASS report (False PASS prevention)", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-fail-test-003",
+      case_id: "prvc.synthetic.node.javascript.core-fail-test-003",
       variants: {
         default: {
           expected: {
@@ -264,7 +264,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize case-specific passing fixture", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-pass");
-    harness.materializeFixture("prvc.synthetic.node.core-pass-001", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.javascript.core-pass-001", "default", tmpDir);
 
     expect(existsSync(join(tmpDir, "package.json"))).toBe(true);
     const pkg = JSON.parse(readFileSync(join(tmpDir, "package.json"), "utf8"));
@@ -274,7 +274,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize case-specific failing fixture for core-fail-test-003", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-fail");
-    harness.materializeFixture("prvc.synthetic.node.core-fail-test-003", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.javascript.core-fail-test-003", "default", tmpDir);
 
     expect(existsSync(join(tmpDir, "package.json"))).toBe(true);
     const pkg = JSON.parse(readFileSync(join(tmpDir, "package.json"), "utf8"));
@@ -284,7 +284,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize empty directory for core-empty-repo-010", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-empty");
-    harness.materializeFixture("prvc.synthetic.node.core-empty-repo-010", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.javascript.core-empty-repo-010", "default", tmpDir);
 
     expect(existsSync(tmpDir)).toBe(true);
     expect(existsSync(join(tmpDir, "package.json"))).toBe(false);

@@ -297,18 +297,18 @@ export class ReferenceHarness {
   public materializeFixture(caseId: string, variantName: string, targetDir: string): void {
     mkdirSync(targetDir, { recursive: true });
 
-    if (caseId === "prvc.synthetic.node.core-empty-repo-010") {
+    if (caseId.endsWith("core-empty-repo-010")) {
       // Empty directory
       return;
     }
 
-    if (caseId === "prvc.synthetic.node.core-fail-lockfile-006") {
+    if (caseId.endsWith("core-fail-lockfile-006")) {
       writeFileSync(join(targetDir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2), "utf8");
       writeFileSync(join(targetDir, "package-lock.json"), "INVALID_JSON_LOCKFILE_SYNTAX {{{", "utf8");
       return;
     }
 
-    if (caseId === "prvc.synthetic.node.core-missing-script-009") {
+    if (caseId.endsWith("core-missing-script-009")) {
       writeFileSync(join(targetDir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2), "utf8");
       return;
     }
@@ -316,22 +316,26 @@ export class ReferenceHarness {
     let testCmd = "node -e 'process.exit(0)'";
     let buildCmd = "node -e 'process.exit(0)'";
 
-    if (caseId === "prvc.synthetic.node.core-fail-test-003") {
+    if (caseId.endsWith("core-fail-test-003")) {
       testCmd = "node -e 'console.error(\"FAIL: test/auth.test.js::Auth::rejects invalid token\"); process.exit(1)'";
-    } else if (caseId === "prvc.synthetic.node.core-fail-build-004") {
+    } else if (caseId.endsWith("core-no-tests-req-007")) {
+      testCmd = "node -e 'console.error(\"NO_TESTS_DISCOVERED: 0 tests found\"); process.exit(1)'";
+    } else if (caseId.endsWith("core-fail-build-004")) {
       buildCmd = "node -e 'console.error(\"TypeScript build compilation error\"); process.exit(1)'";
-    } else if (caseId === "prvc.synthetic.node.core-fail-typecheck-005") {
+    } else if (caseId.endsWith("core-fail-typecheck-005")) {
       buildCmd = "node -e 'console.error(\"Type check failed: Type string is not assignable to number\"); process.exit(1)'";
-    } else if (caseId === "prvc.synthetic.sandbox.node.oom-canary-042") {
+    } else if (caseId.endsWith("oom-canary-042") || caseId.includes("resource-memory-cgroup")) {
       testCmd = "node -e 'let arr = []; while(true) { arr.push(Buffer.alloc(10 * 1024 * 1024)); }'";
-    } else if (caseId === "prvc.synthetic.sandbox.node.pid-fork-canary-043") {
+    } else if (caseId.endsWith("pid-fork-canary-043") || caseId.includes("resource-pids-cgroup")) {
       testCmd = "node -e 'const { fork } = require(\"child_process\"); while(true) { try { fork(__filename); } catch(e) {} }'";
-    } else if (caseId === "prvc.synthetic.sandbox.node.symlink-escape-044") {
+    } else if (caseId.endsWith("symlink-escape-044") || caseId.includes("sandbox-symlink-escape")) {
       testCmd = "node -e 'const fs = require(\"fs\"); fs.readFileSync(\"../../../../etc/passwd\");'";
-    } else if (caseId === "prvc.synthetic.sandbox.node.unhandled-signal-045") {
+    } else if (caseId.endsWith("unhandled-signal-045") || caseId.includes("process-signal-cleanup")) {
       testCmd = "node -e 'process.kill(process.pid, \"SIGSEGV\")'";
-    } else if (caseId === "prvc.synthetic.sandbox.node.egress-leak-046") {
+    } else if (caseId.endsWith("egress-leak-046") || caseId.includes("sandbox-egress-controlled")) {
       testCmd = "node -e 'const net = require(\"net\"); const client = net.createConnection({ host: \"1.1.1.1\", port: 80 });'";
+    } else if (caseId.includes("sandbox-kernel-surfaces")) {
+      testCmd = "node -e 'const fs = require(\"fs\"); fs.statSync(\"/var/run/docker.sock\");'";
     } else if (caseId.includes("real.")) {
       if (variantName === "buggy") {
         testCmd = "node -e 'console.error(\"FAIL: regression test failed on buggy variant\"); process.exit(1)'";
