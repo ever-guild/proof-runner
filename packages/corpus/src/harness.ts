@@ -295,6 +295,12 @@ export class ReferenceHarness {
    * Materializes a case-specific fixture repository matching the oracle requirements.
    */
   public materializeFixture(caseId: string, variantName: string, targetDir: string): void {
+    if (caseId.includes("real.")) {
+      throw new Error(
+        `Cannot materialize ${caseId}: imported candidate cases require source provenance and a reproducible recipe.`,
+      );
+    }
+
     mkdirSync(targetDir, { recursive: true });
 
     if (caseId.endsWith("core-empty-repo-010")) {
@@ -336,12 +342,6 @@ export class ReferenceHarness {
       testCmd = "node -e 'const net = require(\"net\"); const client = net.createConnection({ host: \"1.1.1.1\", port: 80 });'";
     } else if (caseId.includes("sandbox-kernel-surfaces")) {
       testCmd = "node -e 'const fs = require(\"fs\"); fs.statSync(\"/var/run/docker.sock\");'";
-    } else if (caseId.includes("real.")) {
-      if (variantName === "buggy") {
-        testCmd = "node -e 'console.error(\"FAIL: regression test failed on buggy variant\"); process.exit(1)'";
-      } else {
-        testCmd = "node -e 'console.log(\"PASS: all regression tests passed\"); process.exit(0)'";
-      }
     }
 
     const pkgJson = {

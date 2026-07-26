@@ -291,6 +291,15 @@ describe("Reference Harness & Protocol Validation", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it("refuses to fabricate fixtures for imported candidate cases", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-imported-candidate");
+
+    expect(() =>
+      harness.materializeFixture("prvc.real.node.imported-candidate-001", "buggy", tmpDir),
+    ).toThrow(/require source provenance and a reproducible recipe/);
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
   it("should verify sandbox teardown with no residual files", () => {
     const teardown = harness.verifySandboxTeardown(join(__dirname, ".."), "non-existent-run-id");
     expect(teardown.clean).toBe(true);

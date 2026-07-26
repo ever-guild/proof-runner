@@ -3,7 +3,13 @@
 Version: `0.1.0` (Hackathon Smoke Release)
 Specification: `prvc-spec/1.0-draft`
 
-`PRVC` is an independent, reproducible validation benchmark and conformance suite for ProofRunner. It verifies that ProofRunner correctly inspects repositories, enforces sandbox security policy, parses build and test outcomes, handles timeouts and infrastructure failures without issuing false PASS or false FAIL verdicts, and generates tamper-evident signed receipts.
+`PRVC` is an independent, reproducible validation benchmark and conformance suite for ProofRunner. It defines the cases, oracle vocabulary, and reference checks used to validate repository inspection, sandbox policy, build/test outcomes, timeouts, infrastructure failures, and tamper-evident signed receipts.
+
+## Evidence boundary
+
+The checked-in `manifests/certification-report.json` is an `IMPORTED` candidate baseline with zero executed cases. It is not a live-run certification, and the repository does not track a generated run report as evidence. Live certification requires an available container runner, executed fixture commands, and an externally retained report for that exact run.
+
+Imported `real.*` candidates are intentionally not materialized by the reference harness until each candidate supplies source provenance and a reproducible materialization recipe. This prevents placeholder pass/fail commands from being mistaken for evidence about an upstream project.
 
 ## Fixture signature notice
 
@@ -15,7 +21,7 @@ The generated release manifest uses a deterministic RFC 8032 test-vector key. It
 - **Vocabulary (`vocabulary/`)**: Machine-readable enums for run statuses, verdicts, reason codes, stage types, and certification levels.
 - **Profiles (`profiles/`)**: Execution environment definitions (Node.js npm, pnpm, pnpm-workspace, TypeScript).
 - **Suites (`suites/`)**: Test suite manifests (`smoke.yaml`, `core.yaml`, `real-jsts.yaml`, `sandbox.yaml`, `protocol.yaml`, etc.).
-- **Cases (`cases/`)**: 35 logical test cases covering 40 execution variants:
+- **Cases (`cases/`)**: 56 logical test cases covering 65 execution variants:
   - Core PASS/FAIL (10 cases)
   - Input/detection (6 cases)
   - Sandbox & resource limits (8 cases)
