@@ -29,7 +29,7 @@ export function OpenGraphBanner() {
         <div className="flex items-center gap-12 text-slate-400">
           <div className="flex items-center gap-3">
             <GitBranch className="w-8 h-8 text-slate-300" />
-            <span className="text-xl font-medium">Any Repository</span>
+            <span className="text-xl font-medium">Public GitHub · Node/TS</span>
           </div>
           <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
           <div className="flex items-center gap-3">

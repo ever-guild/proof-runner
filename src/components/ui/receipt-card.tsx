@@ -14,6 +14,7 @@ export interface ReceiptCardProps {
 
 export function ReceiptCard({ hash, receiptId, receiptUrl, price, agentInstruction, timestamp, className }: ReceiptCardProps) {
   const verifyUrl = receiptUrl ?? (receiptId ? `/receipts/${encodeURIComponent(receiptId)}` : undefined);
+  const isVerifiableReceipt = Boolean(verifyUrl);
 
   return (
     <Card className={`w-full bg-black/40 border-pass/30 shadow-inner-pass overflow-hidden ${className}`}>
@@ -21,13 +22,13 @@ export function ReceiptCard({ hash, receiptId, receiptUrl, price, agentInstructi
         <div className="flex items-center justify-between">
           <CardTitle className="text-pass flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            Signed receipt
+            {isVerifiableReceipt ? "Signed receipt" : "Sample receipt"}
           </CardTitle>
           {verifyUrl ? (
             <a href={verifyUrl} className="text-xs text-pass/70 hover:text-pass flex items-center gap-1 transition-colors">
               Verify <ArrowUpRight className="w-3 h-3" />
             </a>
-          ) : <span className="text-xs text-slate-500">Sample receipt</span>}
+          ) : <span className="text-xs text-slate-500">Unsigned demo</span>}
         </div>
       </CardHeader>
       <CardContent className="pt-5 space-y-4">

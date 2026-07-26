@@ -52,7 +52,7 @@ export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType:
       icon: <AlertOctagon className="w-4 h-4" />,
       logs: [
         "$ proofrunner prepare-environment",
-        "> Provisioning secure sandbox...",
+        "> Provisioning isolated sandbox...",
         "ERR! Failed to attach volume: EIO.",
         "ERR! Internal orchestration failure."
       ]
@@ -105,7 +105,7 @@ export function SceneErrorEdgeCases({ errorType, onRetry, onBack }: { errorType:
       ]
     },
     unsupported: {
-      badgeVariant: "inconclusive" as const,
+      badgeVariant: "unsupported" as const,
       badgeText: "UNSUPPORTED",
       title: "Repository Not Supported",
       description: "ProofRunner could not select a supported verification skill from the repository metadata.",

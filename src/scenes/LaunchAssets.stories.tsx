@@ -13,7 +13,7 @@ export default meta;
 
 export const OpenGraph: StoryObj = {
   render: () => (
-    <div className="flex justify-center items-center min-h-screen bg-slate-950 p-8 overflow-auto" role="region" tabIndex={0} aria-label="Scrollable Open Graph banner preview">
+    <div className="flex items-start justify-start min-h-screen min-w-max bg-slate-950 p-8 overflow-auto" role="region" tabIndex={0} aria-label="Scrollable Open Graph banner preview">
       <div className="shadow-2xl ring-1 ring-white/10 shrink-0">
         <OpenGraphBanner />
       </div>
@@ -23,7 +23,7 @@ export const OpenGraph: StoryObj = {
 
 export const XHeader: StoryObj = {
   render: () => (
-    <div className="flex justify-center items-center min-h-screen bg-slate-950 p-8 overflow-auto" role="region" tabIndex={0} aria-label="Scrollable X banner preview">
+    <div className="flex items-start justify-start min-h-screen min-w-max bg-slate-950 p-8 overflow-auto" role="region" tabIndex={0} aria-label="Scrollable X banner preview">
       <div className="shadow-2xl ring-1 ring-white/10 shrink-0">
         <XBanner />
       </div>

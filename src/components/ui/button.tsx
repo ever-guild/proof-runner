@@ -36,15 +36,23 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, children, disabled, onClick, ...props }, ref) => {
     const isDisabled = disabled || loading
     
     if (asChild) {
       return (
         <Slot
-          className={cn(buttonVariants({ variant, size, className }))}
+          className={cn(buttonVariants({ variant, size, className }), isDisabled && "pointer-events-none opacity-50")}
           ref={ref}
           {...props}
+          aria-busy={loading || undefined}
+          aria-disabled={isDisabled || undefined}
+          disabled={isDisabled || undefined}
+          tabIndex={isDisabled ? -1 : undefined}
+          onClick={isDisabled ? (event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          } : onClick}
         >
           {children}
         </Slot>
@@ -56,6 +64,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={isDisabled}
+        aria-busy={loading || undefined}
+        onClick={onClick}
         {...props}
       >
         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -14,4 +14,12 @@ describe("Vite development proxy", () => {
       },
     })
   })
+
+  it("serializes Storybook browser files so their shared Vite iframe stays stable on CI", () => {
+    const storybookProject = config.test?.projects?.[0] as {
+      test?: { browser?: { fileParallelism?: boolean } }
+    }
+
+    expect(storybookProject.test?.browser?.fileParallelism).toBe(false)
+  })
 })

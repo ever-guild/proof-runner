@@ -10,7 +10,7 @@ export function Scene5Receipt({ onReset }: { onReset: () => void }) {
         <div className="w-20 h-20 rounded-full bg-pass/10 flex items-center justify-center border border-pass/30 mb-2 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
           <CheckCircle2 className="w-10 h-10 text-pass drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
         </div>
-        <h2 className="text-3xl md:text-4xl font-bold text-slate-100 tracking-tight">Demo Result</h2>
+        <h2 className="text-3xl md:text-4xl font-bold text-slate-100 tracking-tight">Demo result: PASS</h2>
         <p className="text-sm md:text-base text-slate-400 max-w-md">
           This sample shows how a completed verification and receipt summary may be presented. It is not a signed production receipt.
         </p>

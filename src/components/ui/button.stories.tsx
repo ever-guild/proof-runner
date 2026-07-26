@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { expect, within } from 'storybook/test';
 import { Button } from './button';
 import { Settings, Play } from 'lucide-react';
 
@@ -72,5 +73,21 @@ export const Loading: Story = {
     variant: 'primary',
     loading: true,
     children: 'Processing...',
+  },
+};
+
+export const AsChildDisabled: Story = {
+  render: () => (
+    <Button asChild disabled loading>
+      <a href="/unavailable">Unavailable link</a>
+    </Button>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: 'Unavailable link' });
+    await expect(link).toHaveAttribute('aria-disabled', 'true');
+    await expect(link).toHaveAttribute('aria-busy', 'true');
+    await expect(link).toHaveAttribute('disabled');
+    await expect(link).toHaveAttribute('tabindex', '-1');
   },
 };

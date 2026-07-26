@@ -117,7 +117,7 @@ export function LandingPage() {
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="git-ref" className="text-base font-semibold text-slate-200">Git reference</label>
-                  <div className="grid grid-cols-[11rem_1fr] gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[11rem_1fr]">
                     <div>
                       <label htmlFor="git-ref-type" className="sr-only">Git reference type</label>
                       <Select
