@@ -148,12 +148,6 @@ test("production web artifact publishes one canonical origin in HTML, robots, an
   const previousOrigin = process.env.PUBLIC_BASE_URL;
 
   try {
-    await execFile(
-      "corepack",
-      ["pnpm", "--filter", "@ever-guild/proof-runner-metadata", "build"],
-      { cwd: rootDirectory },
-    );
-
     for (const invalidOrigin of invalidPublicOrigins) {
       process.env.PUBLIC_BASE_URL = invalidOrigin;
       await assert.rejects(
