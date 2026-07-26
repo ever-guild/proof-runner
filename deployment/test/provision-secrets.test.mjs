@@ -25,6 +25,7 @@ import {
   initialize,
   parseArgs,
   parseDotenv,
+  validateConfiguration,
 } from "../provision-secrets.mjs";
 
 const createProductionEnv = () => {
@@ -39,11 +40,21 @@ const createProductionEnv = () => {
   const source = readFileSync(envFile, "utf8").replace(
     'PROOF_RUNNER_DOMAIN=""',
     'PROOF_RUNNER_DOMAIN="runner.everguild.dev"',
+  ).replace(
+    'PROOF_RUNNER_RUNTIME_IMAGE=""',
+    `PROOF_RUNNER_RUNTIME_IMAGE="sha256:${"a".repeat(64)}"`,
   );
   writeFileSync(envFile, source, { mode: 0o600 });
   chmodSync(envFile, 0o600);
   return { directory, envFile, publicKeyFile, initialized };
 };
+
+const enablePaidMode = (source) => source
+  .replace("OKX_API_KEY=''", "OKX_API_KEY='api-key-value'")
+  .replace("OKX_SECRET_KEY=''", "OKX_SECRET_KEY='secret-key-value'")
+  .replace("OKX_PASSPHRASE=''", "OKX_PASSPHRASE='passphrase-value'")
+  .replace('PAY_TO_ADDRESS=""', 'PAY_TO_ADDRESS="0x1111111111111111111111111111111111111111"')
+  .replace('PROOF_RUNNER_PAYMENT_MODE="free"', 'PROOF_RUNNER_PAYMENT_MODE="paid"');
 
 const successfulRunner = (calls, failure) => (command, args, options = {}) => {
   calls.push({ command, args, input: options.input });
@@ -71,6 +82,35 @@ test("init creates exclusive files with safe modes, a 48-byte token, and matchin
   const publicKey = createPublicKey(readFileSync(publicKeyFile, "utf8"));
   const derivedPublic = createPublicKey(privateKey).export({ type: "spki", format: "der" });
 
+  assert.deepEqual(Object.keys(environment), [
+    "PROOF_RUNNER_DOMAIN",
+    "PROOF_RUNNER_BEARER_TOKEN",
+    "PROOF_RUNNER_RECEIPT_PRIVATE_KEY",
+    "PROOF_RUNNER_RECEIPT_KEY_ID",
+    "PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS",
+    "PROOF_RUNNER_BACKUP_PATH",
+    "PROOF_RUNNER_BACKUP_RETENTION_DAYS",
+    "PROOF_RUNNER_BACKUP_INTERVAL_SECONDS",
+    "PROOF_RUNNER_RUNTIME_IMAGE",
+    "PROOF_RUNNER_PROXY_IMAGE",
+    "PROOF_RUNNER_LEASE_EXTENSION_MS",
+    "PROOF_RUNNER_REPOSITORY_BYTES",
+    "PROOF_RUNNER_FILE_COUNT",
+    "PROOF_RUNNER_DISK_BYTES",
+    "PROOF_RUNNER_CPU_COUNT",
+    "PROOF_RUNNER_MEMORY_BYTES",
+    "PROOF_RUNNER_PIDS",
+    "PROOF_RUNNER_EXECUTION_MS",
+    "PROOF_RUNNER_OUTPUT_BYTES",
+    "OKX_API_KEY",
+    "OKX_SECRET_KEY",
+    "OKX_PASSPHRASE",
+    "OKX_BASE_URL",
+    "PAY_TO_ADDRESS",
+    "PROOF_RUNNER_PAYMENT_NETWORK",
+    "PROOF_RUNNER_VERIFY_PRICE",
+    "PROOF_RUNNER_PAYMENT_MODE",
+  ]);
   assert.equal(tokenBytes.length, 48);
   assert.equal(privateKey.asymmetricKeyType, "ed25519");
   assert.equal(publicKey.asymmetricKeyType, "ed25519");
@@ -78,10 +118,63 @@ test("init creates exclusive files with safe modes, a 48-byte token, and matchin
   assert.equal(statSync(envFile).mode & 0o777, 0o600);
   assert.equal(statSync(publicKeyFile).mode & 0o777, 0o644);
   assert.equal(initialized.keyId, "receipt-test-1");
+  assert.equal(environment.PROOF_RUNNER_PAYMENT_MODE, "free");
+  assert.equal(environment.OKX_API_KEY, "");
+  assert.equal(environment.OKX_SECRET_KEY, "");
+  assert.equal(environment.OKX_PASSPHRASE, "");
+  assert.equal(environment.PAY_TO_ADDRESS, "");
+  assert.equal(environment.OKX_BASE_URL, "https://web3.okx.com");
+  assert.equal(environment.PROOF_RUNNER_PAYMENT_NETWORK, "eip155:196");
+  assert.equal(environment.PROOF_RUNNER_VERIFY_PRICE, "$0.01");
+  assert.equal(environment.PROOF_RUNNER_EXECUTION_MS, "180000");
+  assert.equal(environment.PROOF_RUNNER_MEMORY_BYTES, "536870912");
+  assert.match(environment.PROOF_RUNNER_RUNTIME_IMAGE, /^sha256:[a-f0-9]{64}$/);
+  assert.match(environment.PROOF_RUNNER_PROXY_IMAGE, /@sha256:[a-f0-9]{64}$/);
   assert.throws(
     () => initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-2" }),
     /Refusing to overwrite existing env file/,
   );
+});
+
+test("init leaves every operator-owned production value unfilled", () => {
+  const directory = mkdtempSync(join(tmpdir(), "proof-runner-secrets-"));
+  const envFile = join(directory, ".env.production");
+  const publicKeyFile = join(directory, "receipt-public.pem");
+  initialize({ outputFile: envFile, publicKeyFile, keyId: "receipt-test-raw" });
+  const environment = parseDotenv(readFileSync(envFile, "utf8"));
+  assert.equal(environment.PROOF_RUNNER_DOMAIN, "");
+  assert.equal(environment.PROOF_RUNNER_RUNTIME_IMAGE, "");
+  assert.equal(environment.OKX_API_KEY, "");
+  assert.equal(environment.OKX_SECRET_KEY, "");
+  assert.equal(environment.OKX_PASSPHRASE, "");
+  assert.equal(environment.PAY_TO_ADDRESS, "");
+});
+
+test("dotenv parser preserves literal dollar signs, apostrophes, and backslashes in operator credentials", () => {
+  const values = parseDotenv("OKX_API_KEY='key$HOME${UNSET}\\'quoted'\n");
+  assert.equal(values.OKX_API_KEY, "key$HOME${UNSET}'quoted");
+  const trailingBackslash = parseDotenv("OKX_SECRET_KEY='credential\\\\'\n");
+  assert.equal(trailingBackslash.OKX_SECRET_KEY, "credential\\\\");
+});
+
+test("single-quoted credentials match Docker Compose interpolation exactly", () => {
+  const { envFile } = createProductionEnv();
+  const source = enablePaidMode(readFileSync(envFile, "utf8")).replace(
+    "OKX_SECRET_KEY='secret-key-value'",
+    "OKX_SECRET_KEY='credential\\\\'",
+  );
+  writeFileSync(envFile, source, { mode: 0o600 });
+  const parsed = parseDotenv(source);
+  const composeFile = fileURLToPath(new URL("../compose.yaml", import.meta.url));
+  const result = spawnSync(
+    "docker",
+    ["compose", "--env-file", envFile, "-f", composeFile, "config", "--format", "json"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const rendered = JSON.parse(result.stdout);
+  assert.equal(rendered.services.api.environment.OKX_SECRET_KEY, parsed.OKX_SECRET_KEY);
+  assert.equal(parsed.OKX_SECRET_KEY, "credential\\\\");
 });
 
 test("init rejects a public-key path that would collide with the env file", () => {
@@ -304,6 +397,126 @@ test("local validation failure makes zero gh calls", () => {
   assert.equal(calls.length, 0);
 });
 
+test("free mode rejects accidental OKX credentials before any gh call", () => {
+  const { envFile } = createProductionEnv();
+  const source = readFileSync(envFile, "utf8").replace(
+    "OKX_API_KEY=''",
+    "OKX_API_KEY='must-not-be-used-in-free-mode'",
+  );
+  writeFileSync(envFile, source, { mode: 0o600 });
+  const calls = [];
+  assert.throws(
+    () => applyConfiguration({
+      repo: "ever-guild/proof-runner",
+      environment: "production",
+      inputFile: envFile,
+      runCommand: successfulRunner(calls),
+    }),
+    /OKX_API_KEY must be empty in free mode/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("paid mode requires the complete OKX credential and receiving-address set", () => {
+  const { envFile } = createProductionEnv();
+  const freeValues = parseDotenv(readFileSync(envFile, "utf8"));
+  assert.throws(
+    () => validateConfiguration({ ...freeValues, PROOF_RUNNER_PAYMENT_MODE: "paid" }),
+    /OKX_API_KEY is required/,
+  );
+  assert.throws(
+    () => validateConfiguration({
+      ...freeValues,
+      PROOF_RUNNER_PAYMENT_MODE: "paid",
+      OKX_API_KEY: "api-key",
+      OKX_SECRET_KEY: "secret-key",
+      OKX_PASSPHRASE: "passphrase",
+      PAY_TO_ADDRESS: "not-an-address",
+    }),
+    /PAY_TO_ADDRESS must be a 20-byte EVM address/,
+  );
+  const paidValues = parseDotenv(enablePaidMode(readFileSync(envFile, "utf8")));
+  assert.equal(validateConfiguration(paidValues), paidValues);
+  assert.throws(
+    () => validateConfiguration({ ...paidValues, OKX_BASE_URL: "https://web3.okx.com:444" }),
+    /official HTTPS facilitator origin/,
+  );
+  assert.equal(
+    validateConfiguration({ ...paidValues, OKX_BASE_URL: "https://web3.okx.com:443" }).OKX_BASE_URL,
+    "https://web3.okx.com:443",
+  );
+});
+
+test("validation rejects an incomplete legacy production schema", () => {
+  const { envFile } = createProductionEnv();
+  const values = parseDotenv(readFileSync(envFile, "utf8"));
+  delete values.OKX_API_KEY;
+  assert.throws(
+    () => validateConfiguration(values),
+    /OKX_API_KEY parameter is required/,
+  );
+});
+
+test("runner policy rejects unsafe images, excessive timeout, and undersized disk", () => {
+  const { envFile } = createProductionEnv();
+  const values = parseDotenv(readFileSync(envFile, "utf8"));
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_RUNTIME_IMAGE: "" }),
+    /PROOF_RUNNER_RUNTIME_IMAGE is required/,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_RUNTIME_IMAGE: "proof-runner-node:1" }),
+    /pinned by sha256 image ID or repository digest/,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry.example/proof-runner@sha256:${"b".repeat(64)}`,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry.example:5000/team/runner@sha256:${"d".repeat(64)}`,
+  );
+  assert.equal(
+    validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry:5000/team/runner@sha256:${"e".repeat(64)}`,
+    }).PROOF_RUNNER_RUNTIME_IMAGE,
+    `registry:5000/team/runner@sha256:${"e".repeat(64)}`,
+  );
+  assert.throws(
+    () => validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `registry.example/team:123/runner@sha256:${"c".repeat(64)}`,
+    }),
+    /pinned by sha256 image ID or repository digest/,
+  );
+  assert.throws(
+    () => validateConfiguration({
+      ...values,
+      PROOF_RUNNER_RUNTIME_IMAGE: `bad_host:5000/team/runner@sha256:${"f".repeat(64)}`,
+    }),
+    /pinned by sha256 image ID or repository digest/,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_PROXY_IMAGE: "ubuntu/squid:latest" }),
+    /pinned by sha256 digest/,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_EXECUTION_MS: "180001" }),
+    /between 1000 and 180000/,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...values, PROOF_RUNNER_DISK_BYTES: "16777216" }),
+    /must be at least PROOF_RUNNER_REPOSITORY_BYTES/,
+  );
+});
+
 test("unsafe env file permissions make zero gh calls", () => {
   const { envFile } = createProductionEnv();
   chmodSync(envFile, 0o640);
@@ -338,6 +551,9 @@ test("dry-run validates and reports the target and allowlisted names without gh"
     "PROOF_RUNNER_RECEIPT_PRIVATE_KEY",
   ]);
   assert.ok(result.variables.includes("PROOF_RUNNER_DOMAIN"));
+  assert.ok(result.variables.includes("PROOF_RUNNER_PAYMENT_MODE"));
+  assert.ok(result.variables.includes("PROOF_RUNNER_EXECUTION_MS"));
+  assert.ok(!result.variables.includes("PAY_TO_ADDRESS"));
 });
 
 test("apply preflights, creates the requested Environment, and sends every value through stdin", () => {
@@ -379,9 +595,26 @@ test("apply preflights, creates the requested Environment, and sends every value
     ["variable", "PROOF_RUNNER_BACKUP_RETENTION_DAYS"],
     ["variable", "PROOF_RUNNER_BACKUP_INTERVAL_SECONDS"],
     ["variable", "PROOF_RUNNER_RUNTIME_IMAGE"],
+    ["variable", "PROOF_RUNNER_PROXY_IMAGE"],
+    ["variable", "PROOF_RUNNER_LEASE_EXTENSION_MS"],
+    ["variable", "PROOF_RUNNER_REPOSITORY_BYTES"],
+    ["variable", "PROOF_RUNNER_FILE_COUNT"],
+    ["variable", "PROOF_RUNNER_DISK_BYTES"],
+    ["variable", "PROOF_RUNNER_CPU_COUNT"],
+    ["variable", "PROOF_RUNNER_MEMORY_BYTES"],
+    ["variable", "PROOF_RUNNER_PIDS"],
+    ["variable", "PROOF_RUNNER_EXECUTION_MS"],
+    ["variable", "PROOF_RUNNER_OUTPUT_BYTES"],
+    ["variable", "OKX_BASE_URL"],
+    ["variable", "PROOF_RUNNER_PAYMENT_NETWORK"],
+    ["variable", "PROOF_RUNNER_VERIFY_PRICE"],
+    ["variable", "PROOF_RUNNER_PAYMENT_MODE"],
   ];
-  assert.deepEqual(calls.slice(5).map(({ args }) => [args[0], args[2]]), expectedOrder);
-  for (const call of calls.slice(5)) {
+  const mutations = calls.filter(({ args }) => (
+    (args[0] === "secret" || args[0] === "variable") && args[1] === "set"
+  ));
+  assert.deepEqual(mutations.map(({ args }) => [args[0], args[2]]), expectedOrder);
+  for (const call of mutations) {
     const name = call.args[2];
     assert.deepEqual(call.args.slice(3), [
       "--repo",
@@ -392,8 +625,87 @@ test("apply preflights, creates the requested Environment, and sends every value
     assert.equal(call.input, expected[name]);
     assert.ok(!call.args.includes(expected[name]));
   }
-  assert.equal(result.applied.length, 9);
+  assert.equal(result.applied.length, expectedOrder.length);
   assert.equal(result.environment, "production-eu");
+});
+
+test("paid apply sends OKX credentials through stdin and switches mode last", () => {
+  const { envFile } = createProductionEnv();
+  const paidSource = enablePaidMode(readFileSync(envFile, "utf8"));
+  writeFileSync(envFile, paidSource, { mode: 0o600 });
+  const expected = parseDotenv(paidSource);
+  const calls = [];
+  const result = applyConfiguration({
+    repo: "ever-guild/proof-runner",
+    environment: "production",
+    inputFile: envFile,
+    runCommand: successfulRunner(calls),
+  });
+  const mutations = calls.filter(({ args }) => (
+    args[0] === "secret" || args[0] === "variable"
+  ));
+  assert.deepEqual(
+    mutations.slice(-5).map(({ args }) => [args[0], args[2]]),
+    [
+      ["secret", "OKX_API_KEY"],
+      ["secret", "OKX_SECRET_KEY"],
+      ["secret", "OKX_PASSPHRASE"],
+      ["variable", "PAY_TO_ADDRESS"],
+      ["variable", "PROOF_RUNNER_PAYMENT_MODE"],
+    ],
+  );
+  for (const call of mutations) {
+    const name = call.args[2];
+    assert.equal(call.input, expected[name]);
+    assert.ok(!call.args.includes(expected[name]));
+  }
+  assert.deepEqual(result.secrets.slice(-3), [
+    "OKX_API_KEY",
+    "OKX_SECRET_KEY",
+    "OKX_PASSPHRASE",
+  ]);
+  assert.ok(result.variables.includes("PAY_TO_ADDRESS"));
+});
+
+test("free apply removes stale paid values before switching payment mode", () => {
+  const { envFile } = createProductionEnv();
+  const calls = [];
+  const runCommand = (command, args, options = {}) => {
+    calls.push({ command, args, input: options.input });
+    if (args[0] === "secret" && args[1] === "list") {
+      return { status: 0, stdout: "OKX_API_KEY\nOKX_SECRET_KEY\nOKX_PASSPHRASE\n" };
+    }
+    if (args[0] === "variable" && args[1] === "list") {
+      return { status: 0, stdout: "PAY_TO_ADDRESS\nPROOF_RUNNER_PAYMENT_MODE\n" };
+    }
+    return { status: 0, stdout: "" };
+  };
+  const result = applyConfiguration({
+    repo: "ever-guild/proof-runner",
+    environment: "production",
+    inputFile: envFile,
+    runCommand,
+  });
+  const remoteMutations = calls.filter(({ args }) => (
+    (args[0] === "secret" || args[0] === "variable")
+    && (args[1] === "set" || args[1] === "delete")
+  ));
+  assert.deepEqual(
+    remoteMutations.slice(-5).map(({ args }) => [args[0], args[1], args[2]]),
+    [
+      ["secret", "delete", "OKX_API_KEY"],
+      ["secret", "delete", "OKX_SECRET_KEY"],
+      ["secret", "delete", "OKX_PASSPHRASE"],
+      ["variable", "delete", "PAY_TO_ADDRESS"],
+      ["variable", "set", "PROOF_RUNNER_PAYMENT_MODE"],
+    ],
+  );
+  assert.deepEqual(result.removed, [
+    "OKX_API_KEY",
+    "OKX_SECRET_KEY",
+    "OKX_PASSPHRASE",
+    "PAY_TO_ADDRESS",
+  ]);
 });
 
 test("apply preserves an existing Environment and its protections", () => {
@@ -415,7 +727,10 @@ test("apply preserves an existing Environment and its protections", () => {
   assert.ok(calls.some(({ args }) => args.includes("--paginate")));
   assert.equal(calls.some(({ args }) => args[0] === "api" && args.includes("PUT")), false);
   assert.equal(result.environment, "Production-EU");
-  for (const { args } of calls.filter(({ args }) => args[0] === "secret" || args[0] === "variable")) {
+  for (const { args } of calls.filter(({ args }) => (
+    (args[0] === "secret" || args[0] === "variable")
+    && (args[1] === "set" || args[1] === "delete")
+  ))) {
     assert.equal(args.at(-1), "Production-EU");
   }
 });

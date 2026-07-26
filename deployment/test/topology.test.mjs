@@ -36,6 +36,8 @@ const composeEnvironment = (domain) => {
     PROOF_RUNNER_RECEIPT_KEY_ID: "test-key",
     PROOF_RUNNER_RECEIPT_PRIVATE_KEY: "test-private-key",
     PROOF_RUNNER_BACKUP_PATH: join(tmpdir(), "proof-runner-backups"),
+    PROOF_RUNNER_RUNTIME_IMAGE: `sha256:${"a".repeat(64)}`,
+    PROOF_RUNNER_PROXY_IMAGE: `ubuntu/squid@sha256:${"b".repeat(64)}`,
   };
   if (domain === undefined) {
     delete environment.PROOF_RUNNER_DOMAIN;
@@ -200,6 +202,47 @@ test("production web artifact publishes one canonical origin in HTML, robots, an
     }
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("Compose uses the API runtime bind names and passes every explicit runner policy", async () => {
+  const compose = await read("compose.yaml");
+  const api = service(compose, "api");
+  const runner = service(compose, "runner");
+  assert.match(api, /PROOF_RUNNER_API_HOST: 0\.0\.0\.0/);
+  assert.match(api, /PROOF_RUNNER_API_PORT: 8787/);
+  assert.doesNotMatch(api, /^      HOST:/m);
+  assert.doesNotMatch(api, /^      PORT:/m);
+  for (const name of [
+    "OKX_API_KEY",
+    "OKX_SECRET_KEY",
+    "OKX_PASSPHRASE",
+    "OKX_BASE_URL",
+    "PAY_TO_ADDRESS",
+    "PROOF_RUNNER_PAYMENT_NETWORK",
+    "PROOF_RUNNER_VERIFY_PRICE",
+    "PROOF_RUNNER_PAYMENT_MODE",
+  ]) {
+    assert.match(api, new RegExp(`^      ${name}:`, "m"));
+  }
+  for (const name of [
+    "PROOF_RUNNER_RUNTIME_IMAGE",
+    "PROOF_RUNNER_PROXY_IMAGE",
+    "PROOF_RUNNER_LEASE_EXTENSION_MS",
+    "PROOF_RUNNER_REPOSITORY_BYTES",
+    "PROOF_RUNNER_FILE_COUNT",
+    "PROOF_RUNNER_DISK_BYTES",
+    "PROOF_RUNNER_CPU_COUNT",
+    "PROOF_RUNNER_MEMORY_BYTES",
+    "PROOF_RUNNER_PIDS",
+    "PROOF_RUNNER_EXECUTION_MS",
+    "PROOF_RUNNER_OUTPUT_BYTES",
+  ]) {
+    assert.match(runner, new RegExp(`^      ${name}:`, "m"));
+  }
+  assert.match(
+    runner,
+    /PROOF_RUNNER_RUNTIME_IMAGE: \$\{PROOF_RUNNER_RUNTIME_IMAGE:\?pin the runtime image by sha256 digest\}/,
+  );
 });
 
 test("runner image carries the pinned skill and host-daemon-visible asset volume", async () => {
