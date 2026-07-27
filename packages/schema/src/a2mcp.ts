@@ -29,10 +29,11 @@ export const InspectRepositoryA2McpResponseSchema = z.object({
   result: InspectResultSchema,
 });
 
-export const VerifyRepositoryA2McpRequestSchema = z.object({
-  ...VerifyRequestSchema.shape,
-  idempotencyKey: z.string().min(1).max(255),
-});
+export const VerifyRepositoryA2McpRequestSchema = VerifyRequestSchema.and(
+  z.object({
+    idempotencyKey: z.string().min(1).max(255),
+  }),
+);
 export const VerifyRepositoryA2McpResponseSchema = z.object({
   contractVersion: ContractVersionSchema,
   operation: z.literal("verify_repository"),

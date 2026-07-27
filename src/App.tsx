@@ -4,6 +4,8 @@ import { AppLayout } from './components/layout/app-layout'
 import { LandingPage } from './pages/LandingPage'
 import { RunPage } from './pages/RunPage'
 import { ReceiptPage } from './pages/ReceiptPage'
+import { ComparisonPage } from './pages/ComparisonPage'
+import { EvidenceBundleVerificationPage } from './pages/EvidenceBundleVerificationPage'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -30,6 +32,8 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/runs/:id" element={<RunPage />} />
           <Route path="/receipts/:id" element={<ReceiptPage />} />
+          <Route path="/compare/:baseline/:candidate" element={<ComparisonPage />} />
+          <Route path="/verify-evidence" element={<EvidenceBundleVerificationPage />} />
           
           {/* Aliases for the demo links */}
           <Route path="/examples/passed" element={<ReceiptPage />} />

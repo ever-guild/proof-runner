@@ -372,6 +372,23 @@ suite("real non-root/no-network fixture execution", () => {
         expect.objectContaining({ id: "test", outcome: "PASSED" }),
       ]),
     );
+    expect(passing.report?.platformControls).toEqual([
+      {
+        control: "COMMAND_ALLOWLIST",
+        status: "ENFORCED",
+        checkId: null,
+      },
+      {
+        control: "BUILD_NETWORK_DISABLED",
+        status: "ENFORCED",
+        checkId: "build",
+      },
+      {
+        control: "TEST_NETWORK_DISABLED",
+        status: "ENFORCED",
+        checkId: "test",
+      },
+    ]);
 
     const failing = await execute("failing");
     expect(failing).toMatchObject({

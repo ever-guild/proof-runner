@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
+import { AcceptanceDecisionPanel } from "../components/acceptance-decision"
 import {
   demoReceipts,
   getDemoKind,
@@ -155,6 +156,10 @@ function LiveRunPage({ id }: { id: string | undefined }) {
                 {run.systemError?.message ?? run.report?.reasonCode ?? (isTimeout ? "Verification timed out before completing all checks." : "Normalized verification evidence is shown above.")}
               </AlertDescription>
             </Alert>
+          )}
+
+          {run.verification?.decision && (
+            <AcceptanceDecisionPanel decision={run.verification.decision} />
           )}
         </div>
 

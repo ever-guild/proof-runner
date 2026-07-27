@@ -16,14 +16,21 @@ import { ReceiptStore, type PersistReceiptOptions, type StoredReceipt } from "./
 
 export class ReceiptService {
   readonly signer: ReceiptSigner;
+  private readonly signingKeyring: Map<string, ReceiptSigner>;
 
   constructor(
     config: ReceiptSignerConfig,
     private readonly store: ReceiptStore,
     private readonly verificationKeys: ReceiptVerifierKey[] = [],
+    signingKeys: ReceiptSignerConfig[] = [],
   ) {
-    validateReceiptKeyConfig(config, verificationKeys);
+    validateReceiptKeyConfig(config, verificationKeys, signingKeys);
     this.signer = new ReceiptSigner(config);
+    this.signingKeyring = new Map(
+      [this.signer, ...signingKeys.map((key) => new ReceiptSigner(key))].map(
+        (signer) => [signer.config.keyId, signer],
+      ),
+    );
   }
 
   issue(report: VerificationReport, options: PersistReceiptOptions = {}): SignedReceipt {
@@ -36,8 +43,13 @@ export class ReceiptService {
     return this.store.get(id);
   }
 
+  getByPayloadHash(payloadHash: string): StoredReceipt | null {
+    return this.store.getByPayloadHash(payloadHash);
+  }
+
   publicKey(keyId: string): ReceiptPublicKey | null {
-    if (keyId === this.signer.config.keyId) return this.signer.publicKey();
+    const signingKey = this.signingKeyring.get(keyId);
+    if (signingKey) return signingKey.publicKey();
     const legacy = this.verificationKeys.find((key) => key.keyId === keyId);
     return legacy
       ? {
@@ -49,9 +61,16 @@ export class ReceiptService {
       : null;
   }
 
+  signerFor(keyId: string): ReceiptSigner | null {
+    return this.signingKeyring.get(keyId) ?? null;
+  }
+
   verify(receipt: unknown): ReceiptVerificationResponse {
     return verifyReceipt(receipt, [
-      { keyId: this.signer.config.keyId, publicKeyPem: this.signer.publicKeyPem },
+      ...[...this.signingKeyring.values()].map((signer) => ({
+        keyId: signer.config.keyId,
+        publicKeyPem: signer.publicKeyPem,
+      })),
       ...this.verificationKeys,
     ]);
   }

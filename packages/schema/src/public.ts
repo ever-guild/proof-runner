@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ContractVersionSchema,
+  Ed25519SignatureSchema,
   FullCommitShaSchema,
   IsoDateTimeSchema,
   RepositoryRefSchema,
@@ -9,10 +10,33 @@ import {
   Sha256Schema,
   UuidSchema,
 } from "./common.js";
+import { AcceptanceDecisionSchema } from "./acceptance-decision.js";
+import {
+  VerificationContractSchema,
+  VerificationEvaluationSchema,
+} from "./verification-contract.js";
 
 export const PUBLIC_API_ROUTES = {
   inspect: { method: "POST", path: "/api/inspect" },
   verify: { method: "POST", path: "/api/verify" },
+  reproducibility: { method: "POST", path: "/api/reproducibility" },
+  reproducibilityResult: {
+    method: "GET",
+    path: "/api/reproducibility/:id",
+  },
+  compare: { method: "POST", path: "/api/comparisons" },
+  comparison: {
+    method: "GET",
+    path: "/api/comparisons/:baseline/:candidate",
+  },
+  receiptBundle: {
+    method: "GET",
+    path: "/api/receipts/:id/bundle",
+  },
+  verifyEvidenceBundle: {
+    method: "POST",
+    path: "/api/evidence-bundles/verify",
+  },
   run: { method: "GET", path: "/api/runs/:id" },
   receipt: { method: "GET", path: "/api/receipts/:id" },
   receiptPublicKey: { method: "GET", path: "/api/receipt-keys/:keyId" },
@@ -94,18 +118,42 @@ export const InspectResultSchema = z.discriminatedUnion("supported", [
   }),
 ]);
 
-export const VerifyRequestSchema = z.object({
-  contractVersion: ContractVersionSchema,
-  repositoryUrl: RepositoryUrlSchema,
-  resolvedCommitSha: FullCommitShaSchema,
-  resolvedRef: RepositoryRefSchema,
-  skill: z.object({
-    name: z.literal("node-typescript"),
-    version: z.literal("1"),
-    hash: Sha256Schema,
-  }),
-  public: z.boolean().default(false),
-});
+export const VerifyRequestSchema = z
+  .object({
+    contractVersion: ContractVersionSchema,
+    repositoryUrl: RepositoryUrlSchema,
+    resolvedCommitSha: FullCommitShaSchema,
+    resolvedRef: RepositoryRefSchema,
+    skill: z.object({
+      name: z.literal("node-typescript"),
+      version: z.literal("1"),
+      hash: Sha256Schema,
+    }),
+    public: z.boolean().default(false),
+    verificationContract: VerificationContractSchema.optional(),
+  })
+  .superRefine((request, context) => {
+    const subject = request.verificationContract?.subject;
+    if (!subject) return;
+    const mismatches = [
+      ["repositoryUrl", subject.repositoryUrl, request.repositoryUrl],
+      [
+        "resolvedCommitSha",
+        subject.resolvedCommitSha,
+        request.resolvedCommitSha,
+      ],
+      ["skillHash", subject.skillHash, request.skill.hash],
+    ] as const;
+    for (const [field, actual, expected] of mismatches) {
+      if (actual !== expected) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${field} must match the verification request`,
+          path: ["verificationContract", "subject", field],
+        });
+      }
+    }
+  });
 
 export const NormalizedCheckSchema = z.object({
   id: z.string().min(1).max(64),
@@ -118,6 +166,47 @@ export const NormalizedCheckSchema = z.object({
   exitCode: z.number().int().nullable(),
   summary: z.string().max(2_000),
 });
+
+export const VerificationArtifactSchema = z
+  .object({
+    id: z.string().min(1).max(64).regex(/^[a-z][a-z0-9._-]*$/),
+    sha256: Sha256Schema,
+  })
+  .strict();
+
+export const PlatformControlEvidenceSchema = z
+  .object({
+    control: z.enum([
+      "COMMAND_ALLOWLIST",
+      "BUILD_NETWORK_DISABLED",
+      "TEST_NETWORK_DISABLED",
+    ]),
+    status: z.enum(["ENFORCED", "VIOLATED"]),
+    checkId: z.string().min(1).max(64).nullable(),
+  })
+  .strict()
+  .superRefine((evidence, context) => {
+    if (
+      evidence.control === "COMMAND_ALLOWLIST" &&
+      evidence.checkId !== null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "the command allowlist control is run-wide",
+        path: ["checkId"],
+      });
+    }
+    if (
+      evidence.control !== "COMMAND_ALLOWLIST" &&
+      evidence.checkId === null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "network controls must identify their normalized check",
+        path: ["checkId"],
+      });
+    }
+  });
 
 export const VerificationReportSchema = z.object({
   contractVersion: ContractVersionSchema,
@@ -133,11 +222,73 @@ export const VerificationReportSchema = z.object({
   runtimeImageDigest: RuntimeImageDigestSchema,
   verdict: VerdictSchema,
   checks: z.array(NormalizedCheckSchema).min(1),
+  artifacts: z.array(VerificationArtifactSchema).max(32).optional(),
+  platformControls: z
+    .array(PlatformControlEvidenceSchema)
+    .max(3)
+    .optional(),
   durationMs: z.number().int().nonnegative(),
   completedAt: IsoDateTimeSchema,
   reasonCode: z.string().min(1).nullable(),
 }).superRefine((report, context) => {
   const outcomes = report.checks.map((check) => check.outcome);
+  const checkIds = new Set<string>();
+  for (const [index, check] of report.checks.entries()) {
+    if (checkIds.has(check.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "normalized check IDs must be unique",
+        path: ["checks", index, "id"],
+      });
+    }
+    checkIds.add(check.id);
+  }
+  const artifactIds = new Set<string>();
+  for (const [index, artifact] of (report.artifacts ?? []).entries()) {
+    if (artifactIds.has(artifact.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "verification artifact IDs must be unique",
+        path: ["artifacts", index, "id"],
+      });
+    }
+    artifactIds.add(artifact.id);
+  }
+  const controls = new Set<string>();
+  for (const [index, evidence] of (report.platformControls ?? []).entries()) {
+    if (controls.has(evidence.control)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "platform control evidence must be unique",
+        path: ["platformControls", index, "control"],
+      });
+    }
+    controls.add(evidence.control);
+    if (evidence.checkId !== null) {
+      const referenced = report.checks.find(
+        (check) => check.id === evidence.checkId,
+      );
+      const expectedStage =
+        evidence.control === "BUILD_NETWORK_DISABLED" ? "BUILD" : "TEST";
+      if (!referenced || referenced.stage !== expectedStage) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "network control evidence must reference its execution stage",
+          path: ["platformControls", index, "checkId"],
+        });
+      }
+    }
+  }
+  if (
+    report.verdict === "PASS" &&
+    report.platformControls?.some((evidence) => evidence.status === "VIOLATED")
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "PASS reports cannot contain violated platform controls",
+      path: ["platformControls"],
+    });
+  }
   if (
     report.verdict === "PASS" &&
     outcomes.some((outcome) => !["PASSED", "SKIPPED"].includes(outcome))
@@ -176,11 +327,16 @@ const SystemErrorSchema = z.object({
   message: z.string().min(1),
   retryable: z.boolean(),
 });
+const RunVerificationSchema = VerificationEvaluationSchema.extend({
+  decision: AcceptanceDecisionSchema.optional(),
+});
+
 const RunBaseSchema = z.object({
   contractVersion: ContractVersionSchema,
   id: UuidSchema,
   createdAt: IsoDateTimeSchema,
   links: RunLinksSchema,
+  verification: RunVerificationSchema.optional(),
 });
 
 export const QueuedRunResponseSchema = RunBaseSchema.extend({
@@ -311,7 +467,7 @@ export const SignedReceiptSchema = z.object({
   payloadHash: Sha256Schema,
   signatureAlgorithm: z.literal("Ed25519"),
   keyId: z.string().min(1),
-  signature: z.string().min(1),
+  signature: Ed25519SignatureSchema,
 });
 
 export const ReceiptPublicKeySchema = z.object({
@@ -342,6 +498,8 @@ export const PublicErrorCodeSchema = z.enum([
   "RUN_QUEUE_FULL",
   "RUN_NOT_FOUND",
   "RECEIPT_NOT_FOUND",
+  "COMPARISON_EVIDENCE_NOT_FOUND",
+  "INCOMPATIBLE_EVIDENCE",
   "INTERNAL_ERROR",
 ]);
 
@@ -351,6 +509,7 @@ export const PublicErrorResponseSchema = z.object({
     code: PublicErrorCodeSchema,
     message: z.string().min(1),
     retryable: z.boolean(),
+    details: z.record(z.string(), z.unknown()).optional(),
   }),
 });
 
@@ -373,6 +532,12 @@ export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
 export type RunStatus = z.infer<typeof RunStatusSchema>;
 export type Verdict = z.infer<typeof VerdictSchema>;
 export type NormalizedCheck = z.infer<typeof NormalizedCheckSchema>;
+export type VerificationArtifact = z.infer<
+  typeof VerificationArtifactSchema
+>;
+export type PlatformControlEvidence = z.infer<
+  typeof PlatformControlEvidenceSchema
+>;
 export type VerificationReport = z.infer<typeof VerificationReportSchema>;
 export type RunResponse = z.infer<typeof RunResponseSchema>;
 export type SignedReceipt = z.infer<typeof SignedReceiptSchema>;

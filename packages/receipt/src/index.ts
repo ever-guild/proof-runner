@@ -20,7 +20,11 @@ import { canonicalize } from "./jcs.js";
 export { canonicalize } from "./jcs.js";
 export { ReceiptService } from "./service.js";
 export { ReceiptStore } from "./store.js";
-export type { PersistReceiptOptions, StoredReceipt } from "./store.js";
+export type {
+  PersistReceiptOptions,
+  RawLogState,
+  StoredReceipt,
+} from "./store.js";
 
 export interface ReceiptSignerConfig {
   keyId: string;
@@ -45,9 +49,20 @@ const privateKey = (pem: string): KeyObject => {
 export const validateReceiptKeyConfig = (
   config: ReceiptSignerConfig,
   verificationKeys: Iterable<ReceiptVerifierKey> = [],
+  signingKeys: Iterable<ReceiptSignerConfig> = [],
 ): void => {
   if (!config.keyId.trim()) throw new Error("PROOF_RUNNER_RECEIPT_KEY_ID is required");
   privateKey(config.privateKeyPem);
+  const signingKeyIds = new Set([config.keyId]);
+  for (const key of signingKeys) {
+    if (!key.keyId.trim() || signingKeyIds.has(key.keyId)) {
+      throw new Error(
+        "Receipt signing key IDs must be non-empty and unique",
+      );
+    }
+    privateKey(key.privateKeyPem);
+    signingKeyIds.add(key.keyId);
+  }
   for (const key of verificationKeys) {
     try {
       const publicKey = createPublicKey(key.publicKeyPem);
@@ -116,12 +131,16 @@ export const verifyReceipt = (
   }
   const key = [...keys].find((entry) => entry.keyId === receipt.keyId);
   if (!key) return { contractVersion: CONTRACT_VERSION, valid: false, reason: "UNKNOWN_KEY" };
-  const valid = verify(
-    null,
-    Buffer.from(canonicalPayload),
-    createPublicKey(key.publicKeyPem),
-    Buffer.from(receipt.signature, "base64"),
-  );
+  const signature = Buffer.from(receipt.signature, "base64");
+  const valid =
+    signature.length === 64 &&
+    signature.toString("base64") === receipt.signature &&
+    verify(
+      null,
+      Buffer.from(canonicalPayload),
+      createPublicKey(key.publicKeyPem),
+      signature,
+    );
   return {
     contractVersion: CONTRACT_VERSION,
     valid,

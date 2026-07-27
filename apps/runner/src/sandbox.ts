@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   NormalizedCheck,
+  PlatformControlEvidence,
   VerificationReport,
   VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
@@ -135,15 +136,38 @@ export class DockerSandbox {
     let reasonCode: string | null = null;
     let terminalStatus: SandboxExecution["status"] = "COMPLETED";
     let verdict: VerificationReport["verdict"] = "INCONCLUSIVE";
+    const platformControls: PlatformControlEvidence[] = [];
 
     try {
       assertCanonicalGithubUrl(request.repositoryUrl);
       const skill = await loadSkill();
       assertSkillHash(skill.hash, request.skill.hash);
+      platformControls.push({
+        control: "COMMAND_ALLOWLIST",
+        status: "ENFORCED",
+        checkId: null,
+      });
 
       startCheck(sandboxCheck);
       hooks.onStage?.("SANDBOX");
-      runtimeDigest = await this.runtimeDigest();
+      runtimeDigest = await this.runtimeImageDigest();
+      const expectedRuntimeDigest =
+        request.verificationContract?.subject.runtimeImageDigest;
+      if (
+        expectedRuntimeDigest !== undefined &&
+        runtimeDigest !== expectedRuntimeDigest
+      ) {
+        return {
+          status: "SYSTEM_ERROR",
+          report: null,
+          systemError: {
+            code: "RUNTIME_IMAGE_MISMATCH",
+            message:
+              "The configured runtime image does not match the verification contract.",
+            retryable: false,
+          },
+        };
+      }
       await this.createWorkspaceVolume(workspaceVolume, deadline);
       await this.startWorkspaceKeeper(
         workspaceKeeper,
@@ -235,6 +259,11 @@ export class DockerSandbox {
           {},
           "/workspace/repo",
         );
+        platformControls.push({
+          control: "BUILD_NETWORK_DISABLED",
+          status: "ENFORCED",
+          checkId: buildCheck.id,
+        });
         finishCheck(
           buildCheck,
           build.exitCode === 0 ? "PASSED" : "FAILED",
@@ -249,6 +278,7 @@ export class DockerSandbox {
             request,
             runtimeDigest,
             checks,
+            platformControls,
             verdict,
             null,
             startedAt,
@@ -273,6 +303,7 @@ export class DockerSandbox {
           request,
           runtimeDigest,
           checks,
+          platformControls,
           verdict,
           reasonCode,
           startedAt,
@@ -293,6 +324,11 @@ export class DockerSandbox {
           {},
           "/workspace/repo",
         );
+        platformControls.push({
+          control: "TEST_NETWORK_DISABLED",
+          status: "ENFORCED",
+          checkId: testCheck.id,
+        });
         finishCheck(
           testCheck,
           test.exitCode === 0 ? "PASSED" : "FAILED",
@@ -335,6 +371,7 @@ export class DockerSandbox {
       request,
       runtimeDigest,
       checks,
+      platformControls,
       verdict,
       reasonCode,
       startedAt,
@@ -347,6 +384,7 @@ export class DockerSandbox {
     request: VerifyRequest,
     runtimeImageDigest: string,
     checks: NormalizedCheck[],
+    platformControls: PlatformControlEvidence[],
     verdict: VerificationReport["verdict"],
     reasonCode: string | null,
     startedAt: number,
@@ -362,6 +400,7 @@ export class DockerSandbox {
       runtimeImageDigest,
       verdict,
       checks,
+      ...(platformControls.length > 0 ? { platformControls } : {}),
       durationMs: Date.now() - startedAt,
       completedAt: new Date().toISOString(),
       reasonCode,
@@ -369,7 +408,7 @@ export class DockerSandbox {
     return { status, report, systemError: null };
   }
 
-  private async runtimeDigest(): Promise<string> {
+  async runtimeImageDigest(): Promise<string> {
     const result = await this.docker(
       ["image", "inspect", "--format", "{{.Id}}", this.config.runtimeImage],
       Date.now() + 30_000,

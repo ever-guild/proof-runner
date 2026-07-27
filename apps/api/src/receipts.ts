@@ -4,6 +4,7 @@ import {
   ReceiptService,
   ReceiptStore,
   validateReceiptKeyConfig,
+  type ReceiptSignerConfig,
   type ReceiptVerifierKey,
 } from "@ever-guild/proof-runner-receipt";
 import {
@@ -17,6 +18,7 @@ export interface ReceiptApiConfig {
   keyId: string;
   privateKeyPem: string;
   verificationKeys: ReceiptVerifierKey[];
+  signingKeys?: ReceiptSignerConfig[];
 }
 
 export const loadReceiptApiConfig = (
@@ -47,8 +49,37 @@ export const loadReceiptApiConfig = (
       throw new Error("PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS must be a JSON array of keyId/publicKeyPem entries");
     }
   }
-  validateReceiptKeyConfig({ keyId, privateKeyPem }, verificationKeys);
-  return { databasePath, keyId, privateKeyPem, verificationKeys };
+  let signingKeys: ReceiptSignerConfig[] = [];
+  if (env.PROOF_RUNNER_RECEIPT_SIGNING_KEYS) {
+    try {
+      const parsed: unknown = JSON.parse(env.PROOF_RUNNER_RECEIPT_SIGNING_KEYS);
+      if (!Array.isArray(parsed) || parsed.some((key) =>
+        typeof key !== "object" || key === null ||
+        typeof key.keyId !== "string" || typeof key.privateKeyPem !== "string",
+      )) {
+        throw new Error("invalid key list");
+      }
+      signingKeys = parsed as ReceiptSignerConfig[];
+      validateReceiptKeyConfig(
+        { keyId, privateKeyPem },
+        verificationKeys,
+        signingKeys,
+      );
+    } catch {
+      throw new Error(
+        "PROOF_RUNNER_RECEIPT_SIGNING_KEYS must be a JSON array of unique keyId/privateKeyPem Ed25519 entries",
+      );
+    }
+  } else {
+    validateReceiptKeyConfig({ keyId, privateKeyPem }, verificationKeys);
+  }
+  return {
+    databasePath,
+    keyId,
+    privateKeyPem,
+    verificationKeys,
+    signingKeys,
+  };
 };
 
 const send = (response: ServerResponse, status: number, payload: unknown): void => {
@@ -69,6 +100,7 @@ export const createReceiptApi = (config: ReceiptApiConfig) => {
     { keyId: config.keyId, privateKeyPem: config.privateKeyPem },
     store,
     config.verificationKeys,
+    config.signingKeys ?? [],
   );
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");

@@ -27,6 +27,72 @@ export type Check = {
   summary: string
 }
 
+export type AcceptanceDecision = {
+  policyVersion: "1"
+  advisory: true
+  outcome: "ACCEPT" | "REMEDIATE" | "HUMAN_REVIEW"
+  reasonCodes: string[]
+}
+
+export type ComparisonCheck = {
+  checkId: string
+  classification: "RESOLVED" | "NEW" | "UNCHANGED" | "ADDED" | "REMOVED"
+  baselineOutcome: Check["outcome"] | null
+  candidateOutcome: Check["outcome"] | null
+}
+
+export type ComparisonEvidence = {
+  runId: string
+  receiptHash: string
+  commitSha: string
+  verdict: "PASS" | "FAIL" | "INCONCLUSIVE"
+  receipt: unknown
+}
+
+export type ComparisonResult = {
+  id: string
+  baseline: ComparisonEvidence
+  candidate: ComparisonEvidence
+  compatibility: {
+    repositoryUrl: string
+    contractVersion: "1.0"
+    skill: { name: string; version: string; hash: string }
+    runtimeImageDigest: string
+    verificationContractHash: string | null
+  }
+  checks: ComparisonCheck[]
+  driftLabels: string[]
+  links: { self: string; ui: string }
+}
+
+export type EvidenceBundleVerification = {
+  contractVersion: "1.0"
+  valid: boolean
+  reason:
+    | "INVALID_ARCHIVE"
+    | "ARCHIVE_LIMIT_EXCEEDED"
+    | "UNSAFE_ARCHIVE_PATH"
+    | "DUPLICATE_ARCHIVE_PATH"
+    | "MANIFEST_INVALID"
+    | "MANIFEST_COVERAGE_MISMATCH"
+    | "CHECKSUM_MISMATCH"
+    | "UNKNOWN_KEY"
+    | "INVALID_MANIFEST_SIGNATURE"
+    | "INVALID_RECEIPT"
+    | "RECEIPT_REPORT_MISMATCH"
+    | "CONTRACT_MISMATCH"
+    | null
+  bundleId: string | null
+}
+
+export type CriterionCoverage = {
+  criterionId: string
+  kind: string
+  required: boolean
+  status: "EXECUTED" | "OBSERVED" | "DECLARED" | "UNVERIFIED"
+  reasonCode: string | null
+}
+
 export type Run = {
   id: string
   status: "QUEUED" | "RUNNING" | "COMPLETED" | "TIMEOUT" | "SYSTEM_ERROR"
@@ -38,6 +104,11 @@ export type Run = {
   links: { self: string; receipt: string | null }
   report: { checks: Check[]; durationMs: number; reasonCode: string | null; runtimeImageDigest: string } | null
   systemError: { code: string; message: string; retryable: boolean } | null
+  verification?: {
+    contract: unknown
+    coverage: CriterionCoverage[]
+    decision?: AcceptanceDecision
+  }
 }
 
 const json = async <T>(response: Response): Promise<T> => {
@@ -80,3 +151,24 @@ export const startVerification = async (inspection: Inspection): Promise<Run> =>
 export const getRun = async (id: string): Promise<Run> => json(await fetch(`/api/runs/${encodeURIComponent(id)}`))
 
 export const getReceipt = async (id: string): Promise<unknown> => json(await fetch(`/api/receipts/${encodeURIComponent(id)}`))
+
+export const verifyEvidenceBundleArchive = async (
+  archive: Blob,
+): Promise<EvidenceBundleVerification> =>
+  json(
+    await fetch("/api/evidence-bundles/verify", {
+      method: "POST",
+      headers: { "content-type": "application/zip" },
+      body: archive,
+    }),
+  )
+
+export const getComparison = async (
+  baseline: string,
+  candidate: string,
+): Promise<ComparisonResult> =>
+  json(
+    await fetch(
+      `/api/comparisons/${encodeURIComponent(baseline)}/${encodeURIComponent(candidate)}`,
+    ),
+  )

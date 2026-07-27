@@ -3,13 +3,37 @@ import { isInternalServiceUrl } from "@ever-guild/proof-runner-schema";
 import { InspectionService } from "./inspection.js";
 import { HttpRunnerClient, Orchestrator } from "./orchestration.js";
 import { loadReceiptApiConfig } from "./receipts.js";
+import { EvidenceBundleService } from "./evidence-bundle.js";
 import { createApiServer } from "./server.js";
 import { RunStore } from "./store.js";
 
 export { PUBLIC_API_ROUTES } from "@ever-guild/proof-runner-schema";
 export { createReceiptApi, issueReceipt, loadReceiptApiConfig } from "./receipts.js";
+export {
+  ComparisonCompatibilityError,
+  ComparisonEvidenceNotFoundError,
+  ComparisonInvalidSelectorError,
+  ComparisonService,
+  compareVerifiedReceipts,
+} from "./comparison.js";
+export {
+  EvidenceBundleLimitError,
+  EvidenceBundleNotFoundError,
+  EvidenceBundleService,
+  MAX_EVIDENCE_BUNDLE_BYTES,
+  createEvidenceBundle,
+  createZipArchive,
+  parseEvidenceBundleArchive,
+  redactRawLog,
+  verifyEvidenceBundle,
+} from "./evidence-bundle.js";
 export { InspectionService } from "./inspection.js";
 export { HttpRunnerClient, Orchestrator } from "./orchestration.js";
+export {
+  compareReproducibilityReports,
+  projectReproducibilityReport,
+  ReproducibilityService,
+} from "./reproducibility.js";
 export { createApiServer } from "./server.js";
 export { RunStore } from "./store.js";
 
@@ -34,6 +58,7 @@ export const createProductionApi = (env: NodeJS.ProcessEnv = process.env) => {
     },
     receiptStore,
     receiptConfig.verificationKeys,
+    receiptConfig.signingKeys,
   );
   const orchestrator = new Orchestrator(
     store,
@@ -46,6 +71,11 @@ export const createProductionApi = (env: NodeJS.ProcessEnv = process.env) => {
     orchestrator,
     bearerToken,
     receipts,
+    evidenceBundles: new EvidenceBundleService(
+      receipts,
+      receiptStore,
+      store,
+    ),
   });
 
   return {

@@ -189,7 +189,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
           payloadHash: "f".repeat(64),
           signatureAlgorithm: "Ed25519",
           keyId: "prvc-test",
-          signature: "s".repeat(128),
+          signature: `${"A".repeat(86)}==`,
         };
       },
     };

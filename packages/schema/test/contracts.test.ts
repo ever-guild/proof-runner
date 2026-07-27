@@ -20,6 +20,24 @@ describe("frozen public contracts", () => {
     expect(PUBLIC_API_ROUTES).toEqual({
       inspect: { method: "POST", path: "/api/inspect" },
       verify: { method: "POST", path: "/api/verify" },
+      reproducibility: { method: "POST", path: "/api/reproducibility" },
+      reproducibilityResult: {
+        method: "GET",
+        path: "/api/reproducibility/:id",
+      },
+      compare: { method: "POST", path: "/api/comparisons" },
+      comparison: {
+        method: "GET",
+        path: "/api/comparisons/:baseline/:candidate",
+      },
+      receiptBundle: {
+        method: "GET",
+        path: "/api/receipts/:id/bundle",
+      },
+      verifyEvidenceBundle: {
+        method: "POST",
+        path: "/api/evidence-bundles/verify",
+      },
       run: { method: "GET", path: "/api/runs/:id" },
       receipt: { method: "GET", path: "/api/receipts/:id" },
       receiptPublicKey: { method: "GET", path: "/api/receipt-keys/:keyId" },

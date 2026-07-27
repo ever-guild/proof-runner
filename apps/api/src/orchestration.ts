@@ -238,17 +238,44 @@ export class Orchestrator {
     if (!this.isActiveLease(runId, result.leaseId)) return "LEASE_EXPIRED";
 
     if (result.status === "SYSTEM_ERROR") {
+      const runtimeMismatch = result.systemError.code === "RUNTIME_IMAGE_MISMATCH";
       if (!this.store.systemError(
         runId,
-        "RUNNER_FAILURE",
-        "The runner could not complete this run.",
-        result.systemError.retryable,
+        runtimeMismatch ? "RUNTIME_IMAGE_MISMATCH" : "RUNNER_FAILURE",
+        runtimeMismatch
+          ? "The configured runtime image does not match the verification contract."
+          : "The runner could not complete this run.",
+        runtimeMismatch ? false : result.systemError.retryable,
         resultFingerprint,
       )) {
         const outcome = this.store.resultDeliveryOutcome(runId, resultFingerprint);
         return outcome === "PENDING" ? "LEASE_EXPIRED" : outcome;
       }
     } else {
+      const expectedRuntimeDigest = this.store
+        .get(runId)
+        ?.request.verificationContract?.subject.runtimeImageDigest;
+      if (
+        expectedRuntimeDigest !== undefined &&
+        result.report.runtimeImageDigest !== expectedRuntimeDigest
+      ) {
+        if (!this.store.systemError(
+          runId,
+          "RUNTIME_IMAGE_MISMATCH",
+          "The configured runtime image does not match the verification contract.",
+          false,
+          resultFingerprint,
+        )) {
+          const outcome = this.store.resultDeliveryOutcome(
+            runId,
+            resultFingerprint,
+          );
+          return outcome === "PENDING" ? "LEASE_EXPIRED" : outcome;
+        }
+        this.active = null;
+        await this.dispatchNext();
+        return "ACCEPTED";
+      }
       try {
         const receipt = this.receipts.issue(result.report);
         if (!this.store.complete(
