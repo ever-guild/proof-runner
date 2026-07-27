@@ -26,7 +26,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox
+      # Keep the root test suite first so workspace bootstrap is exercised from
+      # a clean checkout before typecheck or build can populate package dist/.
+      - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
       - run: pnpm build

@@ -19,7 +19,7 @@
     "prebuild-storybook": "pnpm --filter @ever-guild/proof-runner-metadata build",
     "build-storybook": "storybook build",
     "lint": "eslint src .storybook vite.config.ts vitest.ui.config.ts && pnpm -r lint",
-    "pretest": "pnpm --filter @ever-guild/proof-runner-schema build && pnpm --filter @ever-guild/proof-runner-metadata build",
+    "pretest": "pnpm --filter @ever-guild/proof-runner-schema build && pnpm --filter @ever-guild/proof-runner-receipt build && pnpm --filter @ever-guild/proof-runner-metadata build",
     "test": "vitest run --config vitest.ui.config.ts && pnpm run test:storybook && pnpm -r test && pnpm run test:deployment",
     "test:deployment": "pnpm --filter @ever-guild/proof-runner-metadata build && node --test deployment/test/*.test.mjs",
     "secrets": "node deployment/provision-secrets.mjs",
