@@ -612,6 +612,31 @@ export class DockerSandbox {
     );
     await this.docker(["network", "connect", internalNetwork, name], deadline);
     for (let attempt = 0; attempt < 30; attempt += 1) {
+      const isRunning = await this.docker(
+        ["inspect", "-f", "{{.State.Running}}", name],
+        deadline,
+        true,
+      );
+      if (!isRunning.output.includes("true")) {
+        const diagnostics = await this.docker(
+          ["logs", "--tail", "120", name],
+          deadline,
+          true,
+        );
+        throw new RunnerError(
+          "RUNNER_FAILURE",
+          `Allowlisted egress proxy exited before becoming ready: ${diagnostics.output.trim()}`,
+          true,
+        );
+      }
+
+      const readyFromLogs = await this.docker(
+        ["logs", "--tail", "40", name],
+        deadline,
+        true,
+      );
+      if (/\bAccepting HTTP Socket\b/.test(readyFromLogs.output)) return;
+
       const ready = await this.docker(
         [
           "exec",
