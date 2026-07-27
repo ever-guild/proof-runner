@@ -380,11 +380,13 @@ describe("API-to-runner callback bridge", () => {
           systemError: { code: "LEASE_EXPIRED" },
         });
       });
-      await vi.waitFor(() => expect(dispatches.mock.calls.length).toBeGreaterThan(1));
-      expect(executed).toEqual([first.run.response.id]);
-      expect(store.get(second.run.response.id)?.response).toMatchObject({
-        status: "QUEUED",
-        systemError: null,
+      await vi.waitFor(() => {
+        expect(dispatches.mock.calls.length).toBeGreaterThan(1);
+        expect(executed).toEqual([first.run.response.id]);
+        expect(store.get(second.run.response.id)?.response).toMatchObject({
+          status: "QUEUED",
+          systemError: null,
+        });
       });
 
       releaseCleanup?.();

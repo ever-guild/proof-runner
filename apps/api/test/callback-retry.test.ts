@@ -175,10 +175,12 @@ describe("terminal callback delivery", () => {
     orchestrator.start();
 
     try {
-      await vi.waitFor(() => expect(resultCalls).toBe(2));
-      expect(store.get(created.run.response.id)?.response).toMatchObject({
-        status: "SYSTEM_ERROR",
-        systemError: { code: "RUNNER_FAILURE" },
+      await vi.waitFor(() => {
+        expect(resultCalls).toBe(2);
+        expect(store.get(created.run.response.id)?.response).toMatchObject({
+          status: "SYSTEM_ERROR",
+          systemError: { code: "RUNNER_FAILURE" },
+        });
       });
     } finally {
       orchestrator.stop();
