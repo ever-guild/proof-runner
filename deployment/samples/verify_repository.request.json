@@ -1,9 +1,9 @@
 {
   "contractVersion": "1.0",
-  "idempotencyKey": "proofrunner-demo-20260724-001",
-  "repositoryUrl": "https://github.com/ever-guild/proof-runner",
-  "resolvedCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "resolvedRef": { "type": "branch", "value": "main" },
-  "skill": { "name": "node-typescript", "version": "1", "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
-  "public": false
+  "idempotencyKey": "build-x-demo-broken-001",
+  "repositoryUrl": "https://github.com/ever-guild/proof-runner-demo",
+  "resolvedCommitSha": "504e54eae8440fb52579b805c107cfa814102003",
+  "resolvedRef": { "type": "tag", "value": "demo-broken" },
+  "skill": { "name": "node-typescript", "version": "1", "hash": "96de617cc0440c7a759d4055fa66e06481c2abac653616d45cbc467dd01eb852" },
+  "public": true
 }

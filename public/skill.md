@@ -5,21 +5,21 @@ description: Inspect a public GitHub repository and verify an exact commit with 
 
 # ProofRunner integration contract
 
-This file documents the frozen MVP contract for human and AI agent callers. The
-checked-in web flow uses explicitly labelled synthetic demo data. The public
-service is not currently publicly available, so the routes below describe the
-contract to use only after a deployment is live.
+ProofRunner is publicly available in free mode.
+
+Base URL: `https://proof.ever-guild.net`
 
 ## Launch capabilities
 
-ProofRunner exposes three launch capabilities:
+ProofRunner exposes two public A2MCP services:
 1. `inspect_repository` (free): Inspect a public GitHub repository and resolve git references to an immutable commit SHA.
-2. `verify_repository` (configured free / paid x402): Run isolated verification checks against an immutable commit SHA.
-3. `verify_receipt` (free): Fetch signing public keys and verify signed JSON receipt integrity and authenticity.
+2. `verify_repository` (free during Build X Genesis): Start isolated verification checks against an immutable commit SHA.
+
+Receipt verification is a supporting public API: `POST /api/receipts/verify`.
 
 ## When to use ProofRunner
 
-When the public service is live, use ProofRunner to execute configured install,
+Use ProofRunner to execute configured install,
 build, and test checks against an immutable public Git commit in an isolated
 worker. A PASS verdict means only that the checks named in the receipt passed.
 It is not a security audit or a guarantee that the code is free of defects or
@@ -118,11 +118,11 @@ To verify a signed receipt:
 - Agent routes are `POST /a2mcp/inspect_repository` and
   `POST /a2mcp/verify_repository`. The A2MCP verification request carries an
   `idempotencyKey` in its JSON body.
-- The frozen contract defines free HTTP 200 mode and a possible paid HTTP 402
-  response only when paid mode is explicitly configured and validated. That
-  future response carries a base64-encoded x402 v2 challenge in the
-  `PAYMENT-REQUIRED` header; the idempotent replay uses the same application
-  request and idempotency key.
-- Public OKX.AI/ASP listing and paid x402 mode are not live. Do not claim or
-  invoke either as publicly available until their separate deployment and
-  approval gates are complete.
+- The launch service runs in free HTTP 200 mode. Paid x402 mode is not enabled.
+- `verify_repository` starts execution and returns a run ID plus poll URL.
+  Poll until `COMPLETED`, `TIMEOUT`, or `SYSTEM_ERROR`; a signed receipt URL is
+  added when execution terminates.
+
+## OKX.AI
+
+OKX.AI listing status: under review.

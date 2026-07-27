@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Lock, Bot } from "lucide-react"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { Button } from "../components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card"
 import { Input } from "../components/ui/input"
@@ -11,9 +11,9 @@ import { inspectRepository, startVerification, type Inspection } from "../lib/ap
 
 export function LandingPage() {
   const navigate = useNavigate()
-  const [repositoryUrl, setRepositoryUrl] = React.useState("https://github.com/ever-guild/proof-runner")
-  const [gitRef, setGitRef] = React.useState("main")
-  const [gitRefType, setGitRefType] = React.useState<"branch" | "tag" | "commit">("branch")
+  const [repositoryUrl, setRepositoryUrl] = React.useState("https://github.com/ever-guild/proof-runner-demo")
+  const [gitRef, setGitRef] = React.useState("demo-broken")
+  const [gitRefType, setGitRefType] = React.useState<"branch" | "tag" | "commit">("tag")
   const [inspectState, setInspectState] = React.useState<"idle" | "loading" | "supported" | "unsupported">("idle")
   const [inspection, setInspection] = React.useState<Inspection | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
@@ -75,11 +75,10 @@ export function LandingPage() {
           </h1>
           <p className="text-xl text-white font-semibold tracking-wide uppercase mb-4">Run it. Prove it.</p>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            ProofRunner is designed to verify an exact Git commit in an isolated environment using a pinned verification skill. Public execution and signed receipts remain unavailable until deployment; the linked example is synthetic demo data.
+            ProofRunner executes an exact public Git commit in an isolated environment and returns a reproducible signed receipt.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button asChild variant="primary" size="lg" className="w-full sm:w-auto font-semibold"><a href="#verify">Verify a repository</a></Button>
-            <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto font-semibold"><Link to="/examples/passed">View synthetic demo</Link></Button>
           </div>
           <p className="mt-6 text-sm text-slate-300 font-medium">
             <a href="/skill.md" className="hover:text-indigo-300 transition-colors">Using an AI agent? Get the skill file →</a>
@@ -252,7 +251,7 @@ export function LandingPage() {
           <div className="flex-1 space-y-6">
             <Badge variant="queued" showIcon={false} className="mb-2 border-white/20 text-slate-300"><Bot className="w-3 h-3 mr-2 inline text-indigo-400" /> A2MCP</Badge>
             <h2 className="text-3xl font-bold text-white">Built for agents, not just browsers</h2>
-            <p className="text-slate-300 leading-relaxed">The frozen A2MCP contract defines how agents will inspect a repository, start a run, poll normalized status, and consume a receipt as structured JSON once the public service is live. Public OKX.AI availability and paid x402 mode are not claimed until their separate gates are complete.</p>
+            <p className="text-slate-300 leading-relaxed">Use the A2MCP contract to inspect a repository, start a run, poll normalized status, and consume a signed receipt as structured JSON. The launch service operates in free mode; paid x402 mode is not enabled.</p>
             <div className="flex gap-4 pt-4">
               <Button asChild variant="secondary" className="font-semibold text-white border-white/20"><a href="/skill.md">Open skill.md</a></Button>
               <Button asChild variant="ghost" className="font-semibold text-slate-300"><a href="/llms.txt">Open llms.txt</a></Button>

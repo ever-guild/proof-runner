@@ -2,23 +2,27 @@
 
 Independent execution verification for agent-generated software.
 
-Status: The checked-in repository provides a local web preview and frozen
-contract. Public HTTP endpoints, signed receipts, OKX.AI, and paid x402 are not
-live. Those are separate deployment and approval gates.
+Status: Public service is live in free mode.
 
 ## Human and agent surfaces
 
-- Human UI: /
-- Agent contract: /skill.md
-- Synthetic demo PASS receipt: /examples/passed
-- Synthetic demo FAIL receipt: /examples/broken
+- Human UI: https://proof.ever-guild.net/
+- Agent contract: https://proof.ever-guild.net/skill.md
+- Inspect: POST https://proof.ever-guild.net/a2mcp/inspect_repository
+- Verify: POST https://proof.ever-guild.net/a2mcp/verify_repository
+- Run status: GET https://proof.ever-guild.net/api/runs/{id}
+- Receipt: GET https://proof.ever-guild.net/api/receipts/{id}
+- Receipt verification: POST https://proof.ever-guild.net/api/receipts/verify
 
 ## Capabilities and API routes
 
-Launch capabilities:
+Public A2MCP services:
 - inspect_repository (free)
-- verify_repository (configured free / paid x402 mode when enabled)
-- verify_receipt (free)
+- verify_repository (free during Build X Genesis)
+
+`verify_repository` starts execution and returns a run ID plus poll URL. Poll
+until `COMPLETED`, `TIMEOUT`, or `SYSTEM_ERROR`; a signed receipt URL is added
+at terminal state. Paid x402 mode is not enabled.
 
 Frozen API routes:
 - Inspect repository: POST /api/inspect

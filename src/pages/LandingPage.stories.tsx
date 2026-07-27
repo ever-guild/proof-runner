@@ -38,24 +38,21 @@ export const OperationalLandingDefault: Story = {
     await expect(verifyCta).toBeInTheDocument()
     await expect(verifyCta).toHaveAttribute("href", "#verify")
 
-    const demoReceiptLink = canvas.getByRole("link", { name: "View synthetic demo" })
-    await expect(demoReceiptLink).toBeInTheDocument()
-    await expect(demoReceiptLink).toHaveAttribute("href", "/examples/passed")
-    await expect(canvas.getAllByRole("link", { name: "Synthetic demo" }).length).toBeGreaterThan(0)
-
     const skillLink = canvas.getByRole("link", { name: /Get the skill file/i })
     await expect(skillLink).toBeInTheDocument()
 
     // Check Verification Form controls
     const repoUrlInput = canvas.getByLabelText("Repository URL")
     await expect(repoUrlInput).toBeInTheDocument()
-    await expect(repoUrlInput).toHaveValue("https://github.com/ever-guild/proof-runner")
+    await expect(repoUrlInput).toHaveValue("https://github.com/ever-guild/proof-runner-demo")
 
     const gitRefSelect = canvas.getByLabelText("Git reference type")
     await expect(gitRefSelect).toBeInTheDocument()
+    await expect(gitRefSelect).toHaveValue("tag")
 
     const gitRefInput = canvas.getByLabelText("Git reference")
     await expect(gitRefInput).toBeInTheDocument()
+    await expect(gitRefInput).toHaveValue("demo-broken")
     const gitRefControls = gitRefInput.parentElement?.parentElement
     await expect(gitRefControls).toHaveClass("grid-cols-1", "sm:grid-cols-[11rem_1fr]")
     await expect(gitRefControls?.scrollWidth).toBeLessThanOrEqual(gitRefControls?.clientWidth ?? 0)

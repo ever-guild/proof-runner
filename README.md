@@ -1,7 +1,11 @@
 # ProofRunner
 
-ProofRunner verifies a pinned public GitHub commit and returns a deterministic
-PASS, FAIL, or INCONCLUSIVE report and signed receipt.
+ProofRunner independently verifies agent-built software.
+
+It resolves an exact public Git commit, selects a pinned verification skill,
+executes install, build, and test inside an isolated resource-limited
+environment, and returns PASS, FAIL, or INCONCLUSIVE together with an
+Ed25519-signed receipt.
 
 This repository is a pnpm workspace:
 
@@ -11,9 +15,25 @@ This repository is a pnpm workspace:
 - `packages/schema` — versioned public, runner, A2MCP, receipt, and persistence
   contracts.
 
-PR-001 intentionally contains only the buildable application skeleton and
-frozen contracts. Product behavior starts in later tasks. See
-[`packages/schema/CONTRACTS.md`](packages/schema/CONTRACTS.md).
+## Launch support
+
+- Public GitHub repositories
+- Node.js / TypeScript
+- npm / pnpm
+- Immutable Git commit
+- Isolated execution
+- Signed receipts
+- Evidence bundles
+- Free A2MCP service
+
+## Live product
+
+- Product: <https://proof.ever-guild.net>
+- Demo repository: <https://github.com/ever-guild/proof-runner-demo>
+- A2MCP: `POST /a2mcp/inspect_repository`, `POST /a2mcp/verify_repository`
+- Receipt verification: `POST /api/receipts/verify`
+
+The launch service operates in free mode. Paid x402 mode is not enabled.
 
 Production topology, secret provisioning boundaries, health probes, SQLite
 backup, and frozen A2MCP registration samples are in

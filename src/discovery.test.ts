@@ -14,7 +14,7 @@ import {
 const rootDir = path.resolve(__dirname, "..")
 
 describe("agent discovery & public metadata files", () => {
-  it("public/skill.md documents the complete contract, 3 capabilities, and accurate receipt verification sequence", () => {
+  it("public/skill.md documents the free launch contract and accurate receipt verification sequence", () => {
     const skillPath = path.join(rootDir, "public", "skill.md")
     expect(fs.existsSync(skillPath)).toBe(true)
 
@@ -35,11 +35,11 @@ describe("agent discovery & public metadata files", () => {
     expect(content).toContain("POST /a2mcp/inspect_repository")
     expect(content).toContain("POST /a2mcp/verify_repository")
 
-    // Launch capabilities
+    // Launch services and receipt support
     expect(content).toContain("inspect_repository")
     expect(content).toContain("verify_repository")
-    expect(content).toContain("verify_receipt")
-    expect(content).toContain("configured free / paid x402")
+    expect(content).toContain("two public A2MCP services")
+    expect(content).toContain("free during Build X Genesis")
 
     // Receipt verification contract & exact sequence
     expect(content).toContain("Get Receipt Public Key")
@@ -76,12 +76,10 @@ describe("agent discovery & public metadata files", () => {
     expect(content).toContain("INCONCLUSIVE")
     expect(content).toContain("Timeouts and system failures are strictly `INCONCLUSIVE`, never `FAIL`.")
 
-    // Truthful availability and receipt semantics
-    expect(content).toContain("not currently publicly available")
+    // Launch availability and receipt semantics
+    expect(content).toContain("https://proof.ever-guild.net")
+    expect(content).toContain("Paid x402 mode is not enabled.")
     expect(content).toContain("when a receipt has been issued")
-    expect(content).toContain("not live")
-    expect(content).toContain("PAYMENT-REQUIRED")
-    expect(content).toContain("idempotent replay")
     expect(content).not.toContain('"1.0.0"')
   })
 
@@ -90,14 +88,11 @@ describe("agent discovery & public metadata files", () => {
     expect(fs.existsSync(llmsPath)).toBe(true)
 
     const content = fs.readFileSync(llmsPath, "utf-8")
-    expect(content).toContain("Human UI: /")
-    expect(content).toContain("Agent contract: /skill.md")
-    expect(content).toContain("Synthetic demo PASS receipt: /examples/passed")
-    expect(content).toContain("Synthetic demo FAIL receipt: /examples/broken")
+    expect(content).toContain("Human UI: https://proof.ever-guild.net/")
+    expect(content).toContain("Agent contract: https://proof.ever-guild.net/skill.md")
 
     expect(content).toContain("inspect_repository")
     expect(content).toContain("verify_repository")
-    expect(content).toContain("verify_receipt")
 
     expect(content).toContain("POST /api/inspect")
     expect(content).toContain("POST /api/verify")
@@ -124,7 +119,8 @@ describe("agent discovery & public metadata files", () => {
     expect(content).toContain("Verify `receipt.signature` using Ed25519 over canonicalized payload bytes against fetched `publicKey`")
     expect(content).not.toMatch(/verify Ed25519 signature over .* payload hash/i)
 
-    expect(content).toMatch(/Public HTTP endpoints, signed receipts, OKX\.AI, and paid x402 are not\s+live/)
+    expect(content).toContain("Status: Public service is live in free mode.")
+    expect(content).toContain("Paid x402 mode is not enabled.")
     expect(content).toContain("Timeout is never FAIL")
     expect(content).not.toContain('"1.0.0"')
   })
