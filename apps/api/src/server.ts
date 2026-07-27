@@ -7,22 +7,38 @@ import {
 } from "@ever-guild/proof-runner-metadata";
 import type { ReceiptService } from "@ever-guild/proof-runner-receipt";
 import {
+  ComparisonRequestSchema,
   CONTRACT_VERSION,
   InspectRepositoryA2McpRequestSchema,
   InspectRequestSchema,
   InternalHeartbeatRequestSchema,
   InternalResultDeliveryRequestSchema,
+  ReproducibilityRequestSchema,
   VerifyRepositoryA2McpRequestSchema,
   VerifyRequestSchema,
   type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
+import {
+  ComparisonCompatibilityError,
+  ComparisonEvidenceNotFoundError,
+  ComparisonInvalidSelectorError,
+  ComparisonService,
+} from "./comparison.js";
+import {
+  EvidenceBundleLimitError,
+  EvidenceBundleNotFoundError,
+  EvidenceBundleService,
+  MAX_EVIDENCE_BUNDLE_BYTES,
+} from "./evidence-bundle.js";
 import { InspectionService, InspectionUnavailableError } from "./inspection.js";
 import { Orchestrator } from "./orchestration.js";
 import {
   InvalidJsonBodyError,
+  readBuffer,
   readJson,
   RequestBodyTooLargeError,
 } from "./request-body.js";
+import { ReproducibilityService } from "./reproducibility.js";
 import { RunStore } from "./store.js";
 
 export interface ApiServerDependencies {
@@ -30,7 +46,11 @@ export interface ApiServerDependencies {
   inspection: InspectionService;
   orchestrator: Orchestrator;
   bearerToken: string;
-  receipts?: Pick<ReceiptService, "get" | "publicKey" | "verify">;
+  receipts?: Pick<ReceiptService, "get" | "publicKey" | "verify"> &
+    Partial<Pick<ReceiptService, "getByPayloadHash">>;
+  reproducibility?: ReproducibilityService;
+  comparison?: ComparisonService;
+  evidenceBundles?: EvidenceBundleService;
 }
 
 const send = (response: ServerResponse, status: number, payload: unknown): void => {
@@ -43,6 +63,20 @@ const send = (response: ServerResponse, status: number, payload: unknown): void 
   response.end(body);
 };
 
+const sendArchive = (
+  response: ServerResponse,
+  filename: string,
+  archive: Buffer,
+): void => {
+  response.writeHead(200, {
+    "cache-control": "no-store",
+    "content-disposition": `attachment; filename="${filename}"`,
+    "content-length": archive.length,
+    "content-type": "application/zip",
+  });
+  response.end(archive);
+};
+
 const publicError = (
   response: ServerResponse,
   status: number,
@@ -52,15 +86,23 @@ const publicError = (
     | "IDEMPOTENCY_KEY_CONFLICT"
     | "RUN_NOT_FOUND"
     | "RECEIPT_NOT_FOUND"
+    | "COMPARISON_EVIDENCE_NOT_FOUND"
+    | "INCOMPATIBLE_EVIDENCE"
     | "REQUEST_BODY_TOO_LARGE"
     | "NOT_READY"
     | "INTERNAL_ERROR",
   message: string,
   retryable = false,
+  details?: Record<string, unknown>,
 ): void => {
   send(response, status, {
     contractVersion: CONTRACT_VERSION,
-    error: { code, message, retryable },
+    error: {
+      code,
+      message,
+      retryable,
+      ...(details ? { details } : {}),
+    },
   });
 };
 
@@ -162,6 +204,20 @@ export const renderReceiptOpenGraphHtml = (params: {
 
 
 export const createApiServer = (dependencies: ApiServerDependencies) => {
+  const reproducibility =
+    dependencies.reproducibility ??
+    new ReproducibilityService(dependencies.store);
+  const comparison =
+    dependencies.comparison ??
+    new ComparisonService(
+      {
+        get: (id) => dependencies.receipts?.get(id) ?? null,
+        getByPayloadHash: (payloadHash) =>
+          dependencies.receipts?.getByPayloadHash?.(payloadHash) ?? null,
+      },
+      (runId) =>
+        dependencies.store.get(runId)?.request.verificationContract ?? null,
+    );
   const startVerification = (
     idempotencyKey: string,
     request: VerifyRequest,
@@ -172,11 +228,30 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
     }
     return created;
   };
+  const startReproducibility = (
+    idempotencyKey: string,
+    request: VerifyRequest,
+  ) => {
+    const created = reproducibility.create(idempotencyKey, request);
+    if (created.kind === "created" || created.kind === "replayed") {
+      void dependencies.orchestrator.dispatchNext();
+    }
+    return created;
+  };
 
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://api.internal");
     const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
+    const reproducibilityMatch = url.pathname.match(
+      /^\/api\/reproducibility\/([^/]+)$/,
+    );
+    const comparisonMatch = url.pathname.match(
+      /^\/api\/comparisons\/([^/]+)\/([^/]+)$/,
+    );
     const receiptMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)$/);
+    const receiptBundleMatch = url.pathname.match(
+      /^\/api\/receipts\/([^/]+)\/bundle$/,
+    );
     const htmlReceiptMatch = url.pathname.match(/^\/(?:receipts|examples)\/([^/]+)$/);
     const receiptKeyMatch = url.pathname.match(/^\/api\/receipt-keys\/([^/]+)$/);
     const callbackMatch = url.pathname.match(
@@ -337,6 +412,71 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
         });
       }
 
+      if (request.method === "POST" && url.pathname === "/api/comparisons") {
+        const body = parse(ComparisonRequestSchema, await readJson(request));
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the comparison contract.",
+          );
+        }
+        return send(response, 200, comparison.compare(body));
+      }
+
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/reproducibility"
+      ) {
+        const idempotencyKey = request.headers["idempotency-key"];
+        if (
+          typeof idempotencyKey !== "string" ||
+          !idempotencyKey.trim() ||
+          idempotencyKey.length > 255
+        ) {
+          return publicError(
+            response,
+            400,
+            "IDEMPOTENCY_KEY_REQUIRED",
+            "Idempotency-Key is required.",
+          );
+        }
+
+        const body = parse(
+          ReproducibilityRequestSchema,
+          await readJson(request),
+        );
+        if (!body) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Request does not match the reproducibility contract.",
+          );
+        }
+
+        const created = startReproducibility(idempotencyKey, body);
+        if (created.kind === "conflict") {
+          return publicError(
+            response,
+            409,
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key was used with a different request.",
+          );
+        }
+        if (created.kind === "full") return queueFull(response);
+
+        const current =
+          reproducibility.get(created.reproducibility.id) ??
+          created.reproducibility;
+        return send(response, created.kind === "created" ? 202 : 200, {
+          contractVersion: CONTRACT_VERSION,
+          reproducibility: current,
+          replayed: created.kind === "replayed",
+        });
+      }
+
       if (request.method === "POST" && url.pathname === "/a2mcp/verify_repository") {
         const body = parse(
           VerifyRepositoryA2McpRequestSchema,
@@ -370,6 +510,44 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
         });
       }
 
+      if (request.method === "GET" && reproducibilityMatch) {
+        const reproducibilityId = decodePathSegment(
+          reproducibilityMatch[1] ?? "",
+        );
+        if (reproducibilityId === null) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Reproducibility ID is invalid.",
+          );
+        }
+        const result = reproducibility.get(reproducibilityId);
+        if (!result) {
+          return publicError(
+            response,
+            404,
+            "RUN_NOT_FOUND",
+            "Reproducibility request was not found.",
+          );
+        }
+        return send(response, 200, result);
+      }
+
+      if (request.method === "GET" && comparisonMatch) {
+        const baseline = decodePathSegment(comparisonMatch[1] ?? "");
+        const candidate = decodePathSegment(comparisonMatch[2] ?? "");
+        if (baseline === null || candidate === null) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Comparison selector is invalid.",
+          );
+        }
+        return send(response, 200, comparison.comparePath(baseline, candidate));
+      }
+
       if (request.method === "GET" && runMatch) {
         const runId = decodePathSegment(runMatch[1] ?? "");
         if (runId === null) {
@@ -399,6 +577,32 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
         return send(response, 200, receipt.receipt);
       }
 
+      if (request.method === "GET" && receiptBundleMatch) {
+        const receiptId = decodePathSegment(receiptBundleMatch[1] ?? "");
+        if (receiptId === null) {
+          return publicError(
+            response,
+            400,
+            "INVALID_REQUEST",
+            "Receipt ID is invalid.",
+          );
+        }
+        if (!dependencies.evidenceBundles) {
+          return publicError(
+            response,
+            503,
+            "NOT_READY",
+            "Evidence bundles are not configured.",
+            true,
+          );
+        }
+        return sendArchive(
+          response,
+          `proofrunner-evidence-${receiptId}.zip`,
+          dependencies.evidenceBundles.create(receiptId),
+        );
+      }
+
       if (request.method === "GET" && receiptKeyMatch) {
         const keyId = decodePathSegment(receiptKeyMatch[1] ?? "");
         if (keyId === null) {
@@ -426,6 +630,28 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
           );
         }
         return send(response, 200, dependencies.receipts.verify(await readJson(request)));
+      }
+
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/evidence-bundles/verify"
+      ) {
+        if (!dependencies.evidenceBundles) {
+          return publicError(
+            response,
+            503,
+            "NOT_READY",
+            "Evidence bundle verification is not configured.",
+            true,
+          );
+        }
+        return send(
+          response,
+          200,
+          dependencies.evidenceBundles.verify(
+            await readBuffer(request, MAX_EVIDENCE_BUNDLE_BYTES),
+          ),
+        );
       }
 
       if (callbackMatch) {
@@ -517,18 +743,22 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
     } catch (error) {
       const internalRoute = url.pathname.startsWith("/internal/v1/");
       if (error instanceof RequestBodyTooLargeError) {
+        const limitMessage =
+          url.pathname === "/api/evidence-bundles/verify"
+            ? "Request body exceeds the 4 MiB limit."
+            : "Request body exceeds the 1 MiB limit.";
         return internalRoute
           ? internalError(
               response,
               413,
               "INVALID_REQUEST",
-              "Request body exceeds the 1 MiB limit.",
+              limitMessage,
             )
           : publicError(
               response,
               413,
               "REQUEST_BODY_TOO_LARGE",
-              "Request body exceeds the 1 MiB limit.",
+              limitMessage,
             );
       }
       if (error instanceof InvalidJsonBodyError) {
@@ -553,6 +783,48 @@ export const createApiServer = (dependencies: ApiServerDependencies) => {
           "INTERNAL_ERROR",
           "Repository metadata is temporarily unavailable.",
           true,
+        );
+      }
+      if (error instanceof ComparisonInvalidSelectorError) {
+        return publicError(
+          response,
+          400,
+          "INVALID_REQUEST",
+          "Comparison selectors must be run IDs or receipt hashes.",
+        );
+      }
+      if (error instanceof ComparisonEvidenceNotFoundError) {
+        return publicError(
+          response,
+          404,
+          "COMPARISON_EVIDENCE_NOT_FOUND",
+          "The selected verified evidence was not found.",
+        );
+      }
+      if (error instanceof ComparisonCompatibilityError) {
+        return publicError(
+          response,
+          422,
+          "INCOMPATIBLE_EVIDENCE",
+          "The selected receipts are not compatible for comparison.",
+          false,
+          { reasonCodes: error.reasonCodes },
+        );
+      }
+      if (error instanceof EvidenceBundleNotFoundError) {
+        return publicError(
+          response,
+          404,
+          "RECEIPT_NOT_FOUND",
+          "Receipt was not found.",
+        );
+      }
+      if (error instanceof EvidenceBundleLimitError) {
+        return publicError(
+          response,
+          413,
+          "REQUEST_BODY_TOO_LARGE",
+          "Evidence bundle exceeds the 4 MiB limit.",
         );
       }
       return internalRoute

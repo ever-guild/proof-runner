@@ -27,6 +27,13 @@ Frozen API routes:
 - Signed receipt JSON (when issued): GET /api/receipts/{id}
 - Receipt public key: GET /api/receipt-keys/{keyId}
 - Verify receipt: POST /api/receipts/verify
+- Start reproducibility check: POST /api/reproducibility (requires Idempotency-Key header)
+- Poll reproducibility check: GET /api/reproducibility/{id}
+- Compare verified evidence: POST /api/comparisons
+- Shareable comparison JSON: GET /api/comparisons/{baseline}/{candidate}
+- Download signed evidence bundle: GET /api/receipts/{id}/bundle
+- Verify evidence bundle: POST /api/evidence-bundles/verify
+- Evidence bundle upload UI: /verify-evidence
 - A2MCP Inspect: POST /a2mcp/inspect_repository
 - A2MCP Verify: POST /a2mcp/verify_repository
 
@@ -47,6 +54,17 @@ To verify a receipt:
    a. Canonicalize `receipt.payload` using JCS (RFC 8785).
    b. Compute SHA-256 digest of canonicalized payload and compare to `receipt.payloadHash`.
    c. Verify `receipt.signature` using Ed25519 over canonicalized payload bytes against fetched `publicKey`.
+
+Evidence bundles preserve the receipt contract and add a canonical signed
+manifest, payload checksums, an optional verification contract, and only
+retained redacted logs. Metadata files are explicit digest self-reference
+exclusions. `checksums.txt` covers every payload plus
+`bundle-manifest.json` and `bundle-manifest.sig`, excluding itself. Bundle
+verification rejects unsafe or duplicate ZIP paths, oversized entries,
+incomplete manifest coverage, changed digests, and invalid manifest or receipt
+signatures. Missing or ambiguous credential redaction omits raw logs instead
+of shipping partially sanitized content. The upload UI reports the same
+bounded verifier result without contacting the source repository.
 
 ## MVP limitations & verdict rules
 

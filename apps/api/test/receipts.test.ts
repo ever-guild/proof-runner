@@ -61,6 +61,25 @@ describe("receipt API", () => {
     }
   });
 
+  it("loads a bounded private signing-key ring for bundle rotation", () => {
+    const current = generateKeyPairSync("ed25519").privateKey
+      .export({ type: "pkcs8", format: "pem" }).toString();
+    const previous = generateKeyPairSync("ed25519").privateKey
+      .export({ type: "pkcs8", format: "pem" }).toString();
+    expect(
+      loadReceiptApiConfig({
+        DATABASE_PATH: ":memory:",
+        PROOF_RUNNER_RECEIPT_KEY_ID: "receipt-current",
+        PROOF_RUNNER_RECEIPT_PRIVATE_KEY: current,
+        PROOF_RUNNER_RECEIPT_SIGNING_KEYS: JSON.stringify([
+          { keyId: "receipt-previous", privateKeyPem: previous },
+        ]),
+      }).signingKeys,
+    ).toEqual([
+      { keyId: "receipt-previous", privateKeyPem: previous },
+    ]);
+  });
+
   it("retrieves receipts and public keys and verifies an untrusted payload", async () => {
     const directory = mkdtempSync(join(tmpdir(), "proof-runner-api-"));
     const privateKeyPem = generateKeyPairSync("ed25519").privateKey

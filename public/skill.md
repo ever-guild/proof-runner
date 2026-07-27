@@ -69,6 +69,31 @@ All JSON request and response bodies include `"contractVersion": "1.0"`.
    - Validation reasons when `valid` is false: `PAYLOAD_HASH_MISMATCH`, `UNKNOWN_KEY`, `INVALID_SIGNATURE`, `INVALID_RECEIPT`.
    - Failure modes: `INVALID_REQUEST` (400) if JSON is invalid; `REQUEST_BODY_TOO_LARGE` (413) if body exceeds 1 MiB.
 
+7. **Check Reproducibility**: `POST /api/reproducibility`
+   - Uses the verification request body and an `Idempotency-Key`.
+   - Runs two sequential child verifications and reports
+     `NONDETERMINISTIC_RESULT` when stable verdict/check/artifact evidence differs.
+   - Poll with `GET /api/reproducibility/{id}`.
+
+8. **Compare Verified Commits**: `POST /api/comparisons`
+   - Select baseline and candidate by verified run ID or receipt payload hash.
+   - A stable machine-readable result is also available from
+     `GET /api/comparisons/{baseline}/{candidate}` and the shareable
+     `/compare/{baseline}/{candidate}` UI.
+   - Comparisons preserve both signed receipts and do not generate patches or fixes.
+
+9. **Download Evidence Bundle**: `GET /api/receipts/{id}/bundle`
+   - Returns a deterministic ZIP containing the signed receipt, report,
+     `bundle-manifest.json`, `bundle-manifest.sig`, `checksums.txt`, an optional
+     verification contract, and only retained redacted logs.
+
+10. **Verify Evidence Bundle**: `POST /api/evidence-bundles/verify`
+    - Request body is an `application/zip` bundle up to 4 MiB.
+    - Verifies safe archive structure, complete manifest coverage, SHA-256
+      digests, Ed25519 manifest/receipt signatures, and report/contract bindings.
+    - The `/verify-evidence` UI accepts a downloaded ZIP and presents the
+      stable validity or failure reason without contacting the source repository.
+
 ## Receipt verification flow
 
 To verify a signed receipt:

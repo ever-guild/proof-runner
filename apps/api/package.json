@@ -16,7 +16,8 @@
   "dependencies": {
     "@ever-guild/proof-runner-metadata": "workspace:*",
     "@ever-guild/proof-runner-receipt": "workspace:*",
-    "@ever-guild/proof-runner-schema": "workspace:*"
+    "@ever-guild/proof-runner-schema": "workspace:*",
+    "entities": "8.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1"

@@ -5,6 +5,9 @@ export const ContractVersionSchema = z.literal(CONTRACT_VERSION);
 export const UuidSchema = z.string().uuid();
 export const IsoDateTimeSchema = z.string().datetime({ offset: true });
 export const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+export const Ed25519SignatureSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9+/]{86}==$/);
 export const FullCommitShaSchema = z.string().regex(/^[a-f0-9]{40}$/);
 export const RuntimeImageDigestSchema = z
   .string()

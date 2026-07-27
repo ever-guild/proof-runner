@@ -15,7 +15,11 @@ public key at `GET /api/receipt-keys/:keyId`; clients verify a receipt at
 2. Deploy it as the active key while retaining prior public keys in the
    verifier keyring through `PROOF_RUNNER_RECEIPT_VERIFICATION_KEYS` (a JSON
    array of `{ "keyId", "publicKeyPem" }` objects).
-3. Keep old public keys published until every receipt signed with them has
+3. Retain prior private receipt keys needed to build historical evidence
+   bundles in `PROOF_RUNNER_RECEIPT_SIGNING_KEYS` (a secret JSON array of
+   `{ "keyId", "privateKeyPem" }` objects). Do not place this value in source
+   control or ordinary deployment metadata.
+4. Keep old public keys published until every receipt signed with them has
    expired under the product retention policy. Never re-use a key ID.
 
 `signed_receipts` and `normalized_checks` are persisted in SQLite separately

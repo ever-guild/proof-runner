@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getRun } from "./api"
+import { getRun, verifyEvidenceBundleArchive } from "./api"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -38,5 +38,34 @@ describe("API response handling", () => {
     })))
 
     await expect(getRun("run-123")).resolves.toEqual(run)
+  })
+
+  it("uploads an evidence archive without JSON encoding", async () => {
+    const verification = {
+      contractVersion: "1.0",
+      valid: true,
+      reason: null,
+      bundleId: "a".repeat(64),
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(verification), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    const archive = new Blob(["zip-bytes"], { type: "application/zip" })
+
+    await expect(verifyEvidenceBundleArchive(archive)).resolves.toEqual(
+      verification,
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/evidence-bundles/verify",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/zip" },
+        body: archive,
+      }),
+    )
   })
 })

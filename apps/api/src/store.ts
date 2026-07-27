@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   CONTRACT_VERSION,
   canonicalize,
+  decideAcceptance,
   ReceiptPayloadSchema,
   RunResponseSchema,
   SignedReceiptSchema,
@@ -12,9 +13,11 @@ import {
   type NormalizedCheck,
   type RunResponse,
   type SignedReceipt,
+  type VerificationContract,
   type VerificationReport,
   type VerifyRequest,
 } from "@ever-guild/proof-runner-schema";
+import { evaluateVerificationContract } from "./contract-evaluation.js";
 
 type RunRow = {
   id: string;
@@ -41,6 +44,19 @@ type RunRow = {
   system_error_message: string | null;
   system_error_retryable: number | null;
   result_fingerprint: string | null;
+  verification_contract_json: string | null;
+};
+
+type ReproducibilityRow = {
+  id: string;
+  contract_version: "1.0";
+  idempotency_scope: string;
+  idempotency_key: string;
+  request_fingerprint: string;
+  request_json: string;
+  baseline_run_id: string;
+  candidate_run_id: string;
+  created_at: string;
 };
 
 export type StoredRun = {
@@ -49,8 +65,23 @@ export type StoredRun = {
   sequence: number;
 };
 
+export type StoredReproducibility = {
+  id: string;
+  request: VerifyRequest;
+  children: [StoredRun, StoredRun];
+  createdAt: string;
+};
+
 export type CreateRunResult =
   | { kind: "created" | "replayed"; run: StoredRun }
+  | { kind: "conflict" }
+  | { kind: "full" };
+
+export type CreateReproducibilityResult =
+  | {
+      kind: "created" | "replayed";
+      reproducibility: StoredReproducibility;
+    }
   | { kind: "conflict" }
   | { kind: "full" };
 
@@ -138,6 +169,30 @@ const resultDeliveryMigrationColumns = [
   ["result_fingerprint", "ALTER TABLE run_metadata ADD COLUMN result_fingerprint TEXT"],
 ] as const;
 
+const verificationContractMigrationColumns = [
+  [
+    "verification_contract_json",
+    "ALTER TABLE run_metadata ADD COLUMN verification_contract_json TEXT",
+  ],
+] as const;
+
+const reproducibilityJobColumns = [
+  "id",
+  "contract_version",
+  "idempotency_scope",
+  "idempotency_key",
+  "request_fingerprint",
+  "request_json",
+  "baseline_run_id",
+  "candidate_run_id",
+  "created_at",
+] as const;
+
+const rawLogMetadataColumns = [
+  "run_id",
+  "retention_expires_at",
+] as const;
+
 /**
  * The persistence seam owns queue admission, idempotency and run-state
  * transitions. Callers only deal in validated requests and normalized reports.
@@ -167,51 +222,107 @@ export class RunStore {
         return { kind: "replayed", run: this.inflate(existing) };
       }
 
-      const waiting = this.database.prepare(
-        `SELECT COUNT(*) AS value FROM run_metadata
-         WHERE status = 'QUEUED'`,
-      ).get() as { value: number };
-      if (Number(waiting.value) >= 5) return { kind: "full" };
+      if (this.waitingCount() >= 5) return { kind: "full" };
 
-      const sequence = this.database.prepare(
-        "SELECT COALESCE(MAX(queue_sequence), 0) + 1 AS value FROM run_metadata",
-      ).get() as { value: number };
+      return {
+        kind: "created",
+        run: this.insertQueuedRun({
+          id: randomUUID(),
+          scope: idempotencyScope,
+          idempotencyKey,
+          requestFingerprint,
+          request,
+          sequence: this.nextSequence(),
+          createdAt: new Date().toISOString(),
+        }),
+      };
+    });
+  }
+
+  createReproducibility(
+    idempotencyKey: string,
+    request: VerifyRequest,
+  ): CreateReproducibilityResult {
+    const requestFingerprint = fingerprint(request);
+
+    return this.transaction(() => {
+      const existing = this.database.prepare(
+        `SELECT * FROM reproducibility_jobs
+         WHERE idempotency_scope = ? AND idempotency_key = ?`,
+      ).get(idempotencyScope, idempotencyKey) as ReproducibilityRow | undefined;
+
+      if (existing) {
+        if (existing.request_fingerprint !== requestFingerprint) {
+          return { kind: "conflict" };
+        }
+        return {
+          kind: "replayed",
+          reproducibility: this.inflateReproducibility(existing),
+        };
+      }
+
+      if (this.waitingCount() + 2 > 5) return { kind: "full" };
+
       const id = randomUUID();
       const createdAt = new Date().toISOString();
+      const sequence = this.nextSequence();
+      const scope = `reproducibility:${id}`;
+      const baseline = this.insertQueuedRun({
+        id: randomUUID(),
+        scope,
+        idempotencyKey: "baseline",
+        requestFingerprint,
+        request,
+        sequence,
+        createdAt,
+      });
+      const candidate = this.insertQueuedRun({
+        id: randomUUID(),
+        scope,
+        idempotencyKey: "candidate",
+        requestFingerprint,
+        request,
+        sequence: sequence + 1,
+        createdAt,
+      });
 
       this.database.prepare(
-        `INSERT INTO run_metadata (
+        `INSERT INTO reproducibility_jobs (
           id, contract_version, idempotency_scope, idempotency_key,
-          request_fingerprint, repository_url, resolved_commit_sha,
-          resolved_ref_json, skill_name, skill_version, skill_hash, status,
-          verdict, queue_sequence, active_stage, is_public, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', NULL, ?, NULL, ?, ?)`,
+          request_fingerprint, request_json, baseline_run_id,
+          candidate_run_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         CONTRACT_VERSION,
         idempotencyScope,
         idempotencyKey,
         requestFingerprint,
-        request.repositoryUrl,
-        request.resolvedCommitSha,
-        JSON.stringify(request.resolvedRef),
-        request.skill.name,
-        request.skill.version,
-        request.skill.hash,
-        Number(sequence.value),
-        request.public ? 1 : 0,
+        JSON.stringify(request),
+        baseline.response.id,
+        candidate.response.id,
         createdAt,
       );
 
-      const row = this.row(id);
-      if (!row) throw new Error("Run creation did not persist metadata");
-      return { kind: "created", run: this.inflate(row) };
+      const row = this.reproducibilityRow(id);
+      if (!row) {
+        throw new Error("Reproducibility creation did not persist metadata");
+      }
+      return {
+        kind: "created",
+        reproducibility: this.inflateReproducibility(row),
+      };
     });
   }
 
   get(id: string): StoredRun | null {
     const row = this.row(id);
     return row ? this.inflate(row) : null;
+  }
+
+  getReproducibility(id: string): StoredReproducibility | null {
+    const row = this.reproducibilityRow(id);
+    return row ? this.inflateReproducibility(row) : null;
   }
 
   resultDeliveryOutcome(
@@ -439,6 +550,13 @@ export class RunStore {
       resultDeliveryMigrationColumns,
       "003_result_delivery_fingerprint.sql",
     );
+    this.migrateColumnAdditions(
+      4,
+      verificationContractMigrationColumns,
+      "004_verification_contract.sql",
+    );
+    this.migrateReproducibilityTable();
+    this.migrateEvidenceBundleTables();
   }
 
   private migrateInitialSchema(): void {
@@ -496,7 +614,92 @@ export class RunStore {
     });
   }
 
-  private tableColumns(table: keyof typeof initialSchemaTables | "run_metadata"): string[] {
+  private migrateReproducibilityTable(): void {
+    const available = new Set(this.tableColumns("reproducibility_jobs"));
+    const complete = reproducibilityJobColumns.every((column) =>
+      available.has(column),
+    );
+    const applied = this.migrationApplied(5);
+
+    if (available.size === 0) {
+      if (applied) {
+        throw new Error(
+          "Incomplete reproducibility migration detected; refusing to serve database",
+        );
+      }
+      this.transaction(() => {
+        this.database.exec(
+          readFileSync(
+            new URL(
+              "../../../packages/schema/migrations/005_reproducibility_jobs.sql",
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        );
+        this.recordMigration(5);
+      });
+      return;
+    }
+
+    if (!complete) {
+      throw new Error(
+        "Incomplete reproducibility migration detected; refusing to serve database",
+      );
+    }
+    if (!applied) this.recordMigration(5);
+  }
+
+  private migrateEvidenceBundleTables(): void {
+    const available = new Set(this.tableColumns("raw_log_metadata"));
+    const complete = rawLogMetadataColumns.every((column) =>
+      available.has(column),
+    );
+    if (available.size > 0 && !complete) {
+      throw new Error(
+        "Incomplete evidence-bundle migration detected; refusing to serve database",
+      );
+    }
+    this.transaction(() => {
+      this.database.exec(
+        readFileSync(
+          new URL(
+            "../../../packages/schema/migrations/006_evidence_bundles.sql",
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      );
+      const incompleteBackfill = this.database
+        .prepare(
+          `SELECT raw_logs.run_id
+           FROM raw_logs
+           LEFT JOIN raw_log_metadata
+             ON raw_log_metadata.run_id = raw_logs.run_id
+           GROUP BY raw_logs.run_id
+           HAVING raw_log_metadata.run_id IS NULL
+             OR raw_log_metadata.retention_expires_at < MAX(raw_logs.expires_at)
+           LIMIT 1`,
+        )
+        .get();
+      const indexPresent = this.database
+        .prepare(
+          `SELECT 1
+           FROM sqlite_master
+           WHERE type = 'index'
+             AND name = 'signed_receipts_payload_hash_idx'`,
+        )
+        .get();
+      if (incompleteBackfill || !indexPresent) {
+        throw new Error(
+          "Incomplete evidence-bundle migration detected; refusing to serve database",
+        );
+      }
+      this.recordMigration(6);
+    });
+  }
+
+  private tableColumns(table: string): string[] {
     return (this.database.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as Array<{
       name: string;
     }>).map((column) => column.name);
@@ -532,7 +735,100 @@ export class RunStore {
       | undefined;
   }
 
+  private reproducibilityRow(id: string): ReproducibilityRow | undefined {
+    return this.database.prepare(
+      "SELECT * FROM reproducibility_jobs WHERE id = ?",
+    ).get(id) as ReproducibilityRow | undefined;
+  }
+
+  private waitingCount(): number {
+    const waiting = this.database.prepare(
+      `SELECT COUNT(*) AS value FROM run_metadata
+       WHERE status = 'QUEUED'`,
+    ).get() as { value: number };
+    return Number(waiting.value);
+  }
+
+  private nextSequence(): number {
+    const sequence = this.database.prepare(
+      "SELECT COALESCE(MAX(queue_sequence), 0) + 1 AS value FROM run_metadata",
+    ).get() as { value: number };
+    return Number(sequence.value);
+  }
+
+  private insertQueuedRun(input: {
+    id: string;
+    scope: string;
+    idempotencyKey: string;
+    requestFingerprint: string;
+    request: VerifyRequest;
+    sequence: number;
+    createdAt: string;
+  }): StoredRun {
+    this.database.prepare(
+      `INSERT INTO run_metadata (
+        id, contract_version, idempotency_scope, idempotency_key,
+        request_fingerprint, repository_url, resolved_commit_sha,
+        resolved_ref_json, skill_name, skill_version, skill_hash, status,
+        verdict, queue_sequence, active_stage, is_public,
+        verification_contract_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', NULL, ?, NULL, ?, ?, ?)`,
+    ).run(
+      input.id,
+      CONTRACT_VERSION,
+      input.scope,
+      input.idempotencyKey,
+      input.requestFingerprint,
+      input.request.repositoryUrl,
+      input.request.resolvedCommitSha,
+      JSON.stringify(input.request.resolvedRef),
+      input.request.skill.name,
+      input.request.skill.version,
+      input.request.skill.hash,
+      input.sequence,
+      input.request.public ? 1 : 0,
+      input.request.verificationContract
+        ? JSON.stringify(input.request.verificationContract)
+        : null,
+      input.createdAt,
+    );
+
+    const row = this.row(input.id);
+    if (!row) throw new Error("Run creation did not persist metadata");
+    return this.inflate(row);
+  }
+
+  private inflateReproducibility(
+    row: ReproducibilityRow,
+  ): StoredReproducibility {
+    const request = VerifyRequestSchema.parse(JSON.parse(row.request_json));
+    const baselineRow = this.row(row.baseline_run_id);
+    const candidateRow = this.row(row.candidate_run_id);
+    if (!baselineRow || !candidateRow) {
+      throw new Error("Reproducibility job has missing child runs");
+    }
+
+    const baseline = this.inflate(baselineRow);
+    const candidate = this.inflate(candidateRow);
+    if (
+      canonicalize(baseline.request) !== canonicalize(request) ||
+      canonicalize(candidate.request) !== canonicalize(request)
+    ) {
+      throw new Error("Reproducibility child request does not match its job");
+    }
+
+    return {
+      id: row.id,
+      request,
+      children: [baseline, candidate],
+      createdAt: row.created_at,
+    };
+  }
+
   private requestFor(row: RunRow): VerifyRequest {
+    const verificationContract = row.verification_contract_json
+      ? (JSON.parse(row.verification_contract_json) as VerificationContract)
+      : null;
     return VerifyRequestSchema.parse({
       contractVersion: row.contract_version,
       repositoryUrl: row.repository_url,
@@ -544,6 +840,7 @@ export class RunStore {
         hash: row.skill_hash,
       },
       public: row.is_public === 1,
+      ...(verificationContract ? { verificationContract } : {}),
     });
   }
 
@@ -558,12 +855,32 @@ export class RunStore {
         receipt: null,
       },
     };
+    const withVerification = (
+      report: VerificationReport | null,
+      verdict: RunResponse["verdict"],
+    ) => {
+      if (!request.verificationContract) return base;
+      const coverage = evaluateVerificationContract(
+        request.verificationContract,
+        report,
+      );
+      return {
+        ...base,
+        verification: {
+          contract: request.verificationContract,
+          coverage,
+          ...(verdict
+            ? { decision: decideAcceptance({ verdict, coverage }) }
+            : {}),
+        },
+      };
+    };
     let response: RunResponse;
 
     switch (row.status) {
       case "QUEUED":
         response = {
-          ...base,
+          ...withVerification(null, null),
           status: "QUEUED",
           verdict: null,
           activeStage: null,
@@ -576,7 +893,7 @@ export class RunStore {
         break;
       case "RUNNING":
         response = {
-          ...base,
+          ...withVerification(null, null),
           status: "RUNNING",
           verdict: null,
           activeStage: row.active_stage ?? "SANDBOX",
@@ -589,7 +906,7 @@ export class RunStore {
         break;
       case "SYSTEM_ERROR":
         response = {
-          ...base,
+          ...withVerification(null, "INCONCLUSIVE"),
           status: "SYSTEM_ERROR",
           verdict: "INCONCLUSIVE",
           activeStage: null,
@@ -611,7 +928,7 @@ export class RunStore {
           throw new Error("Terminal run has no signed receipt");
         }
         response = {
-          ...base,
+          ...withVerification(report, report.verdict),
           links: {
             ...base.links,
             receipt: `/api/receipts/${receiptId}`,
@@ -637,7 +954,7 @@ export class RunStore {
           throw new Error("Timeout run has a conclusive report");
         }
         response = {
-          ...base,
+          ...withVerification(report, "INCONCLUSIVE"),
           links: {
             ...base.links,
             receipt: `/api/receipts/${receiptId}`,
@@ -671,7 +988,10 @@ export class RunStore {
       JSON.stringify(report.resolvedRef) === JSON.stringify(request.resolvedRef) &&
       report.skill.name === request.skill.name &&
       report.skill.version === request.skill.version &&
-      report.skill.hash === request.skill.hash
+      report.skill.hash === request.skill.hash &&
+      (request.verificationContract === undefined ||
+        report.runtimeImageDigest ===
+          request.verificationContract.subject.runtimeImageDigest)
     );
   }
 

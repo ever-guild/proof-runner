@@ -118,6 +118,17 @@ function LiveReceiptPage({ id }: { id: string | undefined }) {
         <Button type="button" variant="secondary" className="gap-2" onClick={downloadJson}>
           <Download className="w-4 h-4" /> Download signed JSON
         </Button>
+        <Button asChild variant="secondary" className="gap-2">
+          <a
+            download={`proofrunner-evidence-${id}.zip`}
+            href={`/api/receipts/${encodeURIComponent(id ?? "")}/bundle`}
+          >
+            <Download className="w-4 h-4" /> Download evidence bundle
+          </a>
+        </Button>
+        <Button asChild variant="secondary">
+          <Link to="/verify-evidence">Verify an evidence bundle</Link>
+        </Button>
       </div>
     </div>
   )
