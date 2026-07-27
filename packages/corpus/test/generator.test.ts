@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createPublicKey, verify } from "node:crypto";
 import { generateAllCases } from "../src/generator.js";
 
@@ -47,12 +48,12 @@ describe("PRVC Dataset Generator", () => {
     expect(cert.summary.total_cases).toBe(56);
   });
 
-  it("should generate candidate index matching candidates.jsonl with 56 candidate records matching all 56 cases 1:1", () => {
+  it("should generate candidate records only for actual buggy/fixed case pairs", () => {
     const candPath = join(prvcDir, "index", "candidates.jsonl");
     expect(existsSync(candPath)).toBe(true);
 
     const candidates = readFileSync(candPath, "utf8").trim().split("\n");
-    expect(candidates.length).toBe(56);
+    expect(candidates.length).toBe(9);
 
     for (const candLine of candidates) {
       const cand = JSON.parse(candLine);
@@ -75,6 +76,18 @@ describe("PRVC Dataset Generator", () => {
     }
   });
 
+  it("writes complete, idempotent checksum manifests", () => {
+    const sumsPath = join(prvcDir, "manifests", "SHA256SUMS");
+    const first = readFileSync(sumsPath, "utf8");
+    generateAllCases(prvcDir);
+    const second = readFileSync(sumsPath, "utf8");
+
+    expect(second).toBe(first);
+    expect(second).not.toContain("  manifests/SHA256SUMS\n");
+    expect(second).toContain("  quarantine/README.md\n");
+    expect(execFileSync("sha256sum", ["-c", "manifests/SHA256SUMS"], { cwd: prvcDir, encoding: "utf8" })).not.toContain("FAILED");
+  });
+
   it("should create adapters/ and generators/ directories", () => {
     expect(existsSync(join(prvcDir, "adapters", "README.md"))).toBe(true);
     expect(existsSync(join(prvcDir, "generators", "README.md"))).toBe(true);
@@ -95,7 +108,7 @@ describe("PRVC Dataset Generator", () => {
     const selection = JSON.parse(readFileSync(join(prvcDir, "quarantine", "selection-report.json"), "utf8"));
     expect(selection).toEqual({
       schema_version: "prvc.selection-report/v1",
-      candidates: 56,
+      candidates: 9,
       reproduced: 0,
       gold: 0,
       quarantined: 0,

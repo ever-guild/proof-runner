@@ -11,6 +11,8 @@ The checked-in `manifests/certification-report.json` is an `IMPORTED` candidate 
 
 Imported `real.*` candidates are intentionally not materialized by the reference harness until each candidate supplies source provenance and a reproducible materialization recipe. This prevents placeholder pass/fail commands from being mistaken for evidence about an upstream project.
 
+The reference harness also refuses to materialize sandbox, resource, and cancellation cases without a target-runner adapter. Those cases require real container, cgroup, controlled-egress, and supervisor observations; generic fixture commands cannot manufacture `RESOURCE_EXHAUSTED`, `POLICY_BLOCKED`, or `CANCELLED` evidence. Their live execution remains tracked by Issue #28.
+
 ## Fixture signature notice
 
 The generated release manifest uses a deterministic RFC 8032 test-vector key. Its signature proves only that the checked-in fixture bytes can be reproduced; it does **not** establish publisher authenticity or a trusted release identity. Anyone can recreate and re-sign these fixtures. Do not treat `release-key.pub` as a publisher key.
@@ -24,11 +26,10 @@ The generated release manifest uses a deterministic RFC 8032 test-vector key. It
 - **Cases (`cases/`)**: 56 logical test cases covering 65 execution variants:
   - Core PASS/FAIL and edge cases (10 cases)
   - Input detection and validation (6 cases)
-  - Sandbox isolation and policy enforcement (14 cases)
+  - Sandbox isolation, resource limits, and policy enforcement (19 cases)
   - Receipt tampering and JCS protocol (12 cases)
-  - Resource limits and process lifecycle (4 cases)
   - SWE-PolyBench Verified real JS/TS bug pairs (5 cases / 10 variants)
-  - BugsJS real Node.js bug pairs (5 cases / 10 variants)
+  - BugsJS real Node.js bug pairs (4 cases / 8 variants)
 - **Reference Harness (`src/`)**: Independent TypeScript evaluator for validating ProofRunner outputs against PRVC oracles and metamorphic relations.
 
 ## Usage

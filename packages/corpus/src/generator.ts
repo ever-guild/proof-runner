@@ -310,7 +310,9 @@ export function generateAllCases(baseDir: string) {
   writeFileSync(join(indexDir, "cases.jsonl"), casesJsonlLines.join("\n") + "\n", "utf8");
   writeFileSync(join(indexDir, "variants.jsonl"), variantsJsonlLines.join("\n") + "\n", "utf8");
 
-  // Helper to build a valid candidate record matching candidate-record.schema.json
+  // Candidate records describe reproducible bug-pair materializations.  A
+  // single-variant conformance case is part of the corpus, but it is not a
+  // candidate bug pair and must not be fabricated as one.
   function makeCandidateRecord(caseObj: PrvcCase, oracleObj: PrvcOracle) {
     const candSlug = caseObj.case_id.replace(/^prvc\./, "");
     const candId = `candidate.${candSlug}`;
@@ -322,20 +324,14 @@ export function generateAllCases(baseDir: string) {
       };
     }
 
-    const oracleVariantNames = Object.keys(oracleObj.variants);
-    const hasBuggyFixed = oracleVariantNames.includes("buggy") && oracleVariantNames.includes("fixed");
-    const firstVarName = oracleVariantNames[0] || "default";
-    const buggyVarName = hasBuggyFixed ? "buggy" : firstVarName;
+    const buggyVarName = "buggy";
     const failingTests = oracleObj.variants[buggyVarName]?.expected.tests?.failing_exact || ["test failure"];
 
     const candidateVariants = {
-      buggy: variantsCandidate["buggy"] || variantsCandidate["default"] || { patches: [] },
-      fixed: variantsCandidate["fixed"] || variantsCandidate["default"] || { patches: [] },
+      buggy: variantsCandidate.buggy,
+      fixed: variantsCandidate.fixed,
     };
-
-    const buggyVerdict = oracleObj.variants[buggyVarName]?.expected.verdict === "PASS"
-      ? "FAIL"
-      : (oracleObj.variants[buggyVarName]?.expected.verdict ?? "INCONCLUSIVE");
+    const buggyVerdict = oracleObj.variants[buggyVarName]?.expected.verdict ?? "INCONCLUSIVE";
 
     return {
       schema_version: "prvc.candidate/v2",
@@ -377,10 +373,9 @@ export function generateAllCases(baseDir: string) {
     };
   }
 
-  // Generate 56 candidate records matching all 56 cases 1:1!
-  const candidateRecords = caseDefinitions.map(({ caseObj, oracleObj }) =>
-    makeCandidateRecord(caseObj, oracleObj)
-  );
+  const candidateRecords = caseDefinitions
+    .filter(({ oracleObj }) => "buggy" in oracleObj.variants && "fixed" in oracleObj.variants)
+    .map(({ caseObj, oracleObj }) => makeCandidateRecord(caseObj, oracleObj));
 
   writeFileSync(join(indexDir, "candidates.jsonl"), candidateRecords.map((c) => JSON.stringify(c)).join("\n") + "\n", "utf8");
 
@@ -455,13 +450,14 @@ export function generateAllCases(baseDir: string) {
   writeFileSync(join(signaturesDir, "release-manifest.sig"), signatureHex, "utf8");
   writeFileSync(join(signaturesDir, "release-key.pub"), pubKeyPem, "utf8");
 
-  generateSha256Sums(baseDir);
-
   writeFileSync(
     join(quarantineDir, "README.md"),
     "# PRVC Quarantine Directory\n\nNo quarantine observations are recorded without run evidence.\n",
     "utf8"
   );
+
+  // All normative files must exist before checksums are calculated.
+  generateSha256Sums(baseDir);
 
   return { totalCases: caseDefinitions.length, totalVariants: variantsJsonlLines.length };
 }
@@ -496,7 +492,9 @@ export function generateSha256Sums(baseDir: string): void {
     if (existsSync(dPath)) {
       const files = (readdirSync(dPath, { recursive: true }) as string[]).sort();
       for (const f of files) {
-        if (f.includes("SHA256SUMS") || f.startsWith("signatures")) continue;
+        // SHA256SUMS cannot verify itself. Signatures use a distinct
+        // verification path and are intentionally excluded from this manifest.
+        if (dirName === "manifests" && (f === "SHA256SUMS" || f.startsWith("signatures/"))) continue;
         const fullP = join(dPath, f);
         if (existsSync(fullP)) {
           try {
@@ -513,4 +511,3 @@ export function generateSha256Sums(baseDir: string): void {
 
   writeFileSync(join(manifestsDir, "SHA256SUMS"), checksumLines.join("\n") + "\n", "utf8");
 }
-

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- black-box API responses are validated at runtime. */
-import { existsSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verify } from "node:crypto";
@@ -63,9 +63,27 @@ export interface BlackBoxExecuteOptions {
 
 export class ReferenceHarness {
   private validator: PrvcValidator;
+  private readonly cases: Map<string, { variants: Set<string>; suites: Set<string> }>;
 
   constructor(baseDir?: string) {
-    this.validator = new PrvcValidator(baseDir || join(__dirname, ".."));
+    const corpusDir = baseDir || join(__dirname, "..");
+    this.validator = new PrvcValidator(corpusDir);
+    this.cases = new Map();
+    const indexPath = join(corpusDir, "index", "cases.jsonl");
+    if (existsSync(indexPath)) {
+      for (const line of readFileSync(indexPath, "utf8").trim().split("\n")) {
+        if (!line) continue;
+        const entry = JSON.parse(line) as {
+          case_id: string;
+          suite: string[];
+          variants: Record<string, unknown>;
+        };
+        this.cases.set(entry.case_id, {
+          variants: new Set(Object.keys(entry.variants)),
+          suites: new Set(entry.suite),
+        });
+      }
+    }
   }
 
   /**
@@ -295,26 +313,41 @@ export class ReferenceHarness {
    * Materializes a case-specific fixture repository matching the oracle requirements.
    */
   public materializeFixture(caseId: string, variantName: string, targetDir: string): void {
+    const definition = this.cases.get(caseId);
+    if (!definition || !definition.variants.has(variantName)) {
+      throw new Error(`Unknown PRVC case/variant: ${caseId}/${variantName}`);
+    }
     if (caseId.includes("real.")) {
       throw new Error(
         `Cannot materialize ${caseId}: imported candidate cases require source provenance and a reproducible recipe.`,
       );
     }
 
+    // Policy, resource, and cancellation cases have to be driven by the
+    // target runner's container, cgroup, controlled-egress, and supervisor
+    // adapters. Generic Node commands cannot truthfully manufacture their
+    // product-native terminal status, so the reference harness refuses to
+    // produce false certification input.
+    if (definition.suites.has("sandbox")) {
+      throw new Error(
+        `Cannot materialize ${caseId}: sandbox cases require a target-runner adapter and live execution evidence.`,
+      );
+    }
+
     mkdirSync(targetDir, { recursive: true });
 
-    if (caseId.endsWith("core-empty-repo-010")) {
+    if (caseId === "prvc.synthetic.node.core-empty-repo-010") {
       // Empty directory
       return;
     }
 
-    if (caseId.endsWith("core-fail-lockfile-006")) {
+    if (caseId === "prvc.synthetic.node.core-fail-lockfile-006") {
       writeFileSync(join(targetDir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2), "utf8");
       writeFileSync(join(targetDir, "package-lock.json"), "INVALID_JSON_LOCKFILE_SYNTAX {{{", "utf8");
       return;
     }
 
-    if (caseId.endsWith("core-missing-script-009")) {
+    if (caseId === "prvc.synthetic.node.core-missing-script-009") {
       writeFileSync(join(targetDir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2), "utf8");
       return;
     }
@@ -322,26 +355,14 @@ export class ReferenceHarness {
     let testCmd = "node -e 'process.exit(0)'";
     let buildCmd = "node -e 'process.exit(0)'";
 
-    if (caseId.endsWith("core-fail-test-003")) {
+    if (caseId === "prvc.synthetic.node.core-fail-test-003") {
       testCmd = "node -e 'console.error(\"FAIL: test/auth.test.js::Auth::rejects invalid token\"); process.exit(1)'";
-    } else if (caseId.endsWith("core-no-tests-req-007")) {
+    } else if (caseId === "prvc.synthetic.node.core-no-tests-req-007") {
       testCmd = "node -e 'console.error(\"NO_TESTS_DISCOVERED: 0 tests found\"); process.exit(1)'";
-    } else if (caseId.endsWith("core-fail-build-004")) {
+    } else if (caseId === "prvc.synthetic.node.core-fail-build-004") {
       buildCmd = "node -e 'console.error(\"TypeScript build compilation error\"); process.exit(1)'";
-    } else if (caseId.endsWith("core-fail-typecheck-005")) {
+    } else if (caseId === "prvc.synthetic.node.core-fail-typecheck-005") {
       buildCmd = "node -e 'console.error(\"Type check failed: Type string is not assignable to number\"); process.exit(1)'";
-    } else if (caseId.endsWith("oom-canary-042") || caseId.includes("resource-memory-cgroup")) {
-      testCmd = "node -e 'let arr = []; while(true) { arr.push(Buffer.alloc(10 * 1024 * 1024)); }'";
-    } else if (caseId.endsWith("pid-fork-canary-043") || caseId.includes("resource-pids-cgroup")) {
-      testCmd = "node -e 'const { fork } = require(\"child_process\"); while(true) { try { fork(__filename); } catch(e) {} }'";
-    } else if (caseId.endsWith("symlink-escape-044") || caseId.includes("sandbox-symlink-escape")) {
-      testCmd = "node -e 'const fs = require(\"fs\"); fs.readFileSync(\"../../../../etc/passwd\");'";
-    } else if (caseId.endsWith("unhandled-signal-045") || caseId.includes("process-signal-cleanup")) {
-      testCmd = "node -e 'process.kill(process.pid, \"SIGSEGV\")'";
-    } else if (caseId.endsWith("egress-leak-046") || caseId.includes("sandbox-egress-controlled")) {
-      testCmd = "node -e 'const net = require(\"net\"); const client = net.createConnection({ host: \"1.1.1.1\", port: 80 });'";
-    } else if (caseId.includes("sandbox-kernel-surfaces")) {
-      testCmd = "node -e 'const fs = require(\"fs\"); fs.statSync(\"/var/run/docker.sock\");'";
     }
 
     const pkgJson = {

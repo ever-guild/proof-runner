@@ -264,7 +264,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize case-specific passing fixture", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-pass");
-    harness.materializeFixture("prvc.synthetic.node.javascript.core-pass-001", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.core-pass-001", "default", tmpDir);
 
     expect(existsSync(join(tmpDir, "package.json"))).toBe(true);
     const pkg = JSON.parse(readFileSync(join(tmpDir, "package.json"), "utf8"));
@@ -274,7 +274,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize case-specific failing fixture for core-fail-test-003", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-fail");
-    harness.materializeFixture("prvc.synthetic.node.javascript.core-fail-test-003", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.core-fail-test-003", "default", tmpDir);
 
     expect(existsSync(join(tmpDir, "package.json"))).toBe(true);
     const pkg = JSON.parse(readFileSync(join(tmpDir, "package.json"), "utf8"));
@@ -284,7 +284,7 @@ describe("Reference Harness & Protocol Validation", () => {
 
   it("should materialize empty directory for core-empty-repo-010", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-empty");
-    harness.materializeFixture("prvc.synthetic.node.javascript.core-empty-repo-010", "default", tmpDir);
+    harness.materializeFixture("prvc.synthetic.node.core-empty-repo-010", "default", tmpDir);
 
     expect(existsSync(tmpDir)).toBe(true);
     expect(existsSync(join(tmpDir, "package.json"))).toBe(false);
@@ -295,8 +295,24 @@ describe("Reference Harness & Protocol Validation", () => {
     const tmpDir = join(__dirname, "..", "tmp-test-fixture-imported-candidate");
 
     expect(() =>
-      harness.materializeFixture("prvc.real.node.imported-candidate-001", "buggy", tmpDir),
+      harness.materializeFixture("prvc.real.pbv.javascript.express-037", "buggy", tmpDir),
     ).toThrow(/require source provenance and a reproducible recipe/);
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
+  it("rejects typoed case identifiers instead of suffix-matching a fixture", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-typo");
+    expect(() =>
+      harness.materializeFixture("prvc.synthetic.node.javascript.core-empty-repo-010", "default", tmpDir),
+    ).toThrow(/Unknown PRVC case\/variant/);
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
+  it("refuses sandbox materialization without a target-runner adapter", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-sandbox");
+    expect(() =>
+      harness.materializeFixture("prvc.synthetic.sandbox.node.resource-memory-cgroup-v1", "default", tmpDir),
+    ).toThrow(/require a target-runner adapter and live execution evidence/);
     expect(existsSync(tmpDir)).toBe(false);
   });
 
