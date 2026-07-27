@@ -2,7 +2,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTRACT_VERSION,
   EvidenceBundleVerificationResponseSchema,
@@ -165,6 +165,93 @@ describe("evidence bundle API", () => {
         error: { code: "REQUEST_BODY_TOO_LARGE" },
       });
     } finally {
+      orchestrator.stop();
+      store.close();
+      receiptStore.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("creates a valid bundle via HTTP GET without reading/including retained raw logs when isPublic is false", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-bundle-private-"));
+    directories.push(directory);
+    const databasePath = join(directory, "runs.sqlite");
+    const store = new RunStore(databasePath);
+    const receiptStore = new ReceiptStore(databasePath);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const receipts = new ReceiptService(
+      {
+        keyId: "private-bundle-test",
+        privateKeyPem: privateKey
+          .export({ type: "pkcs8", format: "pem" })
+          .toString(),
+      },
+      receiptStore,
+    );
+    const privateReceipt = receipts.issue(report, {
+      isPublic: false,
+      rawLogs: [
+        {
+          stream: "stdout",
+          content: "sensitive-private-log-entry",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const rawLogsSpy = vi.spyOn(receiptStore, "rawLogs");
+    const evidenceBundles = new EvidenceBundleService(
+      receipts,
+      receiptStore,
+      store,
+    );
+    const orchestrator = new Orchestrator(store, idleRunner, receipts.signer);
+    const server = createApiServer({
+      store,
+      inspection: new InspectionService(),
+      orchestrator,
+      bearerToken: "t".repeat(32),
+      receipts,
+      evidenceBundles,
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("missing server address");
+    }
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const download = await fetch(
+        `${baseUrl}/api/receipts/${privateReceipt.payload.id}/bundle`,
+      );
+      expect(download.status).toBe(200);
+      expect(download.headers.get("content-type")).toBe("application/zip");
+      expect(download.headers.get("content-disposition")).toContain(
+        `proofrunner-evidence-${privateReceipt.payload.id}.zip`,
+      );
+      expect(rawLogsSpy).not.toHaveBeenCalled();
+
+      const archive = Buffer.from(await download.arrayBuffer());
+      expect(archive.toString("utf8")).not.toContain("sensitive-private-log-entry");
+
+      const verification = await fetch(
+        `${baseUrl}/api/evidence-bundles/verify`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/zip" },
+          body: archive,
+        },
+      );
+      expect(verification.status).toBe(200);
+      expect(
+        EvidenceBundleVerificationResponseSchema.parse(
+          await verification.json(),
+        ),
+      ).toMatchObject({ valid: true, reason: null });
+    } finally {
+      rawLogsSpy.mockRestore();
       orchestrator.stop();
       store.close();
       receiptStore.close();

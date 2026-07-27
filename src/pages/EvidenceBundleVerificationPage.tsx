@@ -38,36 +38,128 @@ export const evidenceBundleFailureMessage = (
   return reason ? messages[reason] : "The evidence bundle is invalid."
 }
 
+export type EvidenceBundleVerificationState = {
+  archive: File | null
+  result: EvidenceBundleVerification | null
+  error: string
+  verifying: boolean
+  generation: number
+}
+
+export type EvidenceBundleVerificationAction =
+  | { type: "SELECT_ARCHIVE"; archive: File | null }
+  | { type: "START_VERIFICATION"; generation: number }
+  | {
+      type: "VERIFICATION_SUCCESS"
+      generation: number
+      result: EvidenceBundleVerification
+    }
+  | { type: "VERIFICATION_ERROR"; generation: number; error: string }
+  | { type: "SET_ERROR"; error: string }
+
+export const initialVerificationState: EvidenceBundleVerificationState = {
+  archive: null,
+  result: null,
+  error: "",
+  verifying: false,
+  generation: 0,
+}
+
+export function verificationReducer(
+  state: EvidenceBundleVerificationState,
+  action: EvidenceBundleVerificationAction,
+): EvidenceBundleVerificationState {
+  switch (action.type) {
+    case "SELECT_ARCHIVE":
+      return {
+        ...state,
+        archive: action.archive,
+        result: null,
+        error: "",
+        verifying: false,
+        generation: state.generation + 1,
+      }
+    case "START_VERIFICATION":
+      return {
+        ...state,
+        result: null,
+        error: "",
+        verifying: true,
+        generation: action.generation,
+      }
+    case "VERIFICATION_SUCCESS":
+      if (action.generation !== state.generation) {
+        return state
+      }
+      return {
+        ...state,
+        result: action.result,
+        verifying: false,
+      }
+    case "VERIFICATION_ERROR":
+      if (action.generation !== state.generation) {
+        return state
+      }
+      return {
+        ...state,
+        error: action.error,
+        verifying: false,
+      }
+    case "SET_ERROR":
+      return {
+        ...state,
+        error: action.error,
+        verifying: false,
+      }
+    default:
+      return state
+  }
+}
+
 export function EvidenceBundleVerificationPage() {
-  const [archive, setArchive] = React.useState<File | null>(null)
-  const [result, setResult] =
-    React.useState<EvidenceBundleVerification | null>(null)
-  const [error, setError] = React.useState("")
-  const [verifying, setVerifying] = React.useState(false)
+  const [state, dispatch] = React.useReducer(
+    verificationReducer,
+    initialVerificationState,
+  )
+  const generationRef = React.useRef(state.generation)
+  generationRef.current = state.generation
 
   const verifyArchive = async (event: React.FormEvent) => {
     event.preventDefault()
-    setResult(null)
-    setError("")
-    if (!archive) {
-      setError("Choose an evidence bundle ZIP first.")
+    if (!state.archive) {
+      dispatch({
+        type: "SET_ERROR",
+        error: "Choose an evidence bundle ZIP first.",
+      })
       return
     }
-    if (archive.size > MAX_ARCHIVE_BYTES) {
-      setError("The archive exceeds the 4 MiB verification limit.")
+    if (state.archive.size > MAX_ARCHIVE_BYTES) {
+      dispatch({
+        type: "SET_ERROR",
+        error: "The archive exceeds the 4 MiB verification limit.",
+      })
       return
     }
-    setVerifying(true)
+    const nextGen = generationRef.current + 1
+    const targetArchive = state.archive
+    dispatch({ type: "START_VERIFICATION", generation: nextGen })
+
     try {
-      setResult(await verifyEvidenceBundleArchive(archive))
+      const res = await verifyEvidenceBundleArchive(targetArchive)
+      dispatch({
+        type: "VERIFICATION_SUCCESS",
+        generation: nextGen,
+        result: res,
+      })
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "The archive could not be verified.",
-      )
-    } finally {
-      setVerifying(false)
+      dispatch({
+        type: "VERIFICATION_ERROR",
+        generation: nextGen,
+        error:
+          requestError instanceof Error
+            ? requestError.message
+            : "The archive could not be verified.",
+      })
     }
   }
 
@@ -102,52 +194,53 @@ export function EvidenceBundleVerificationPage() {
                 type="file"
                 accept=".zip,application/zip"
                 onChange={(event) => {
-                  setArchive(event.target.files?.[0] ?? null)
-                  setResult(null)
-                  setError("")
+                  dispatch({
+                    type: "SELECT_ARCHIVE",
+                    archive: event.target.files?.[0] ?? null,
+                  })
                 }}
               />
             </label>
-            <Button type="submit" disabled={verifying} className="gap-2">
-              {verifying ? (
+            <Button type="submit" disabled={state.verifying} className="gap-2">
+              {state.verifying ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <FileCheck2 className="h-4 w-4" />
               )}
-              {verifying ? "Verifying…" : "Verify evidence"}
+              {state.verifying ? "Verifying…" : "Verify evidence"}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      {error && (
+      {state.error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Verification unavailable</AlertTitle>
-          <AlertDescription className="break-all">{error}</AlertDescription>
+          <AlertDescription className="break-all">{state.error}</AlertDescription>
         </Alert>
       )}
 
-      {result?.valid && (
+      {state.result?.valid && (
         <Alert variant="success">
           <CheckCircle2 className="h-4 w-4" />
           <AlertTitle>Evidence bundle is valid</AlertTitle>
           <AlertDescription className="break-all">
             Manifest and receipt signatures are valid. Bundle ID:{" "}
-            <span className="font-mono">{result.bundleId}</span>
+            <span className="font-mono">{state.result.bundleId}</span>
           </AlertDescription>
         </Alert>
       )}
 
-      {result && !result.valid && (
+      {state.result && !state.result.valid && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Evidence bundle is invalid</AlertTitle>
           <AlertDescription>
-            {evidenceBundleFailureMessage(result.reason)}
-            {result.reason && (
+            {evidenceBundleFailureMessage(state.result.reason)}
+            {state.result.reason && (
               <span className="mt-2 block font-mono text-xs">
-                {result.reason}
+                {state.result.reason}
               </span>
             )}
           </AlertDescription>

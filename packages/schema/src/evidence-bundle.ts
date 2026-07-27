@@ -68,7 +68,7 @@ export const EvidenceBundleManifestSchema = z
       .object({
         id: UuidSchema,
         payloadHash: Sha256Schema,
-        keyId: z.string().min(1).max(128),
+        keyId: z.string().min(1),
       })
       .strict(),
     createdAt: IsoDateTimeSchema,
@@ -144,7 +144,7 @@ export const EvidenceBundleManifestSchema = z
 export const EvidenceBundleSignatureSchema = z
   .object({
     bundleVersion: EvidenceBundleVersionSchema,
-    keyId: z.string().min(1).max(128),
+    keyId: z.string().min(1),
     canonicalization: z.literal("JCS-RFC8785"),
     hashAlgorithm: z.literal("SHA-256"),
     manifestHash: Sha256Schema,

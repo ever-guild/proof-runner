@@ -347,4 +347,79 @@ describe("verified receipt comparison", () => {
       );
     }
   });
+
+  it("classifies SKIPPED as non-passing evidence correctly across check outcome transitions", () => {
+    const makeCheckReport = (
+      runId: string,
+      outcomes: Record<string, "PASSED" | "FAILED" | "INCONCLUSIVE" | "SKIPPED">,
+    ) => {
+      const hasFailure = Object.values(outcomes).some(
+        (outcome) => outcome === "FAILED" || outcome === "INCONCLUSIVE",
+      );
+      return report({
+        runId,
+        commit: "a".repeat(40),
+        verdict: hasFailure ? "FAIL" : "PASS",
+        checks: Object.entries(outcomes).map(([id, outcome]) => ({
+          id,
+          stage: "TEST",
+          title: id,
+          outcome,
+          startedAt: "2026-07-26T12:00:00.000Z",
+          completedAt: "2026-07-26T12:00:01.000Z",
+          durationMs: 1_000,
+          exitCode: outcome === "PASSED" ? 0 : 1,
+          summary: `${id} ${outcome.toLowerCase()}.`,
+        })),
+      });
+    };
+
+    const leftReceipt = signer.issue(
+      makeCheckReport("018f47ac-5d7b-7c20-a1aa-0242ac120201", {
+        failedToSkipped: "FAILED",
+        inconclusiveToSkipped: "INCONCLUSIVE",
+        passedToSkipped: "PASSED",
+        failedToPassed: "FAILED",
+        inconclusiveToPassed: "INCONCLUSIVE",
+        skippedToPassed: "SKIPPED",
+        skippedToFailed: "SKIPPED",
+        skippedToInconclusive: "SKIPPED",
+      }),
+    );
+    const rightReceipt = signer.issue(
+      makeCheckReport("018f47ac-5d7b-7c20-a1aa-0242ac120202", {
+        failedToSkipped: "SKIPPED",
+        inconclusiveToSkipped: "SKIPPED",
+        passedToSkipped: "SKIPPED",
+        failedToPassed: "PASSED",
+        inconclusiveToPassed: "PASSED",
+        skippedToPassed: "PASSED",
+        skippedToFailed: "FAILED",
+        skippedToInconclusive: "INCONCLUSIVE",
+      }),
+    );
+
+    const comparison = compareVerifiedReceipts({
+      request: {
+        contractVersion: CONTRACT_VERSION,
+        baseline: { type: "run-id", value: leftReceipt.payload.id },
+        candidate: { type: "run-id", value: rightReceipt.payload.id },
+      },
+      baselineReceipt: leftReceipt,
+      candidateReceipt: rightReceipt,
+    });
+
+    const checkMap = new Map(
+      comparison.checks.map((c) => [c.checkId, c.classification]),
+    );
+
+    expect(checkMap.get("failedToSkipped")).toBe("UNCHANGED");
+    expect(checkMap.get("inconclusiveToSkipped")).toBe("UNCHANGED");
+    expect(checkMap.get("passedToSkipped")).toBe("NEW");
+    expect(checkMap.get("failedToPassed")).toBe("RESOLVED");
+    expect(checkMap.get("inconclusiveToPassed")).toBe("RESOLVED");
+    expect(checkMap.get("skippedToPassed")).toBe("RESOLVED");
+    expect(checkMap.get("skippedToFailed")).toBe("UNCHANGED");
+    expect(checkMap.get("skippedToInconclusive")).toBe("UNCHANGED");
+  });
 });

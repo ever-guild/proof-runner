@@ -127,4 +127,31 @@ describe("evidence bundle contracts", () => {
       bundleId: null,
     });
   });
+
+  it("accepts 128-character boundary and 129-character first-above-boundary key IDs in manifest and signature", () => {
+    const keyId128 = "k".repeat(128);
+    const keyId129 = "k".repeat(129);
+
+    for (const keyId of [keyId128, keyId129]) {
+      const manifestWithKey = {
+        ...manifest,
+        receipt: {
+          ...manifest.receipt,
+          keyId,
+        },
+      };
+      expect(EvidenceBundleManifestSchema.parse(manifestWithKey).receipt.keyId).toBe(keyId);
+
+      const signatureWithKey = {
+        bundleVersion: "1",
+        keyId,
+        canonicalization: "JCS-RFC8785",
+        hashAlgorithm: "SHA-256",
+        manifestHash: "d".repeat(64),
+        signatureAlgorithm: "Ed25519",
+        signature: `${"A".repeat(86)}==`,
+      };
+      expect(EvidenceBundleSignatureSchema.parse(signatureWithKey).keyId).toBe(keyId);
+    }
+  });
 });

@@ -10,31 +10,156 @@ import {
   type ComparisonResult,
 } from "../lib/api"
 
+export type ComparisonPageState = {
+  baseline: string | undefined
+  candidate: string | undefined
+  comparison: ComparisonResult | null
+  error: string
+  loading: boolean
+}
+
+export type ComparisonPageAction =
+  | { type: "ROUTE_CHANGED"; baseline?: string; candidate?: string }
+  | {
+      type: "FETCH_SUCCESS"
+      baseline?: string
+      candidate?: string
+      comparison: ComparisonResult
+    }
+  | {
+      type: "FETCH_ERROR"
+      baseline?: string
+      candidate?: string
+      error: string
+    }
+
+export const initialComparisonPageState: ComparisonPageState = {
+  baseline: undefined,
+  candidate: undefined,
+  comparison: null,
+  error: "",
+  loading: false,
+}
+
+export function comparisonPageReducer(
+  state: ComparisonPageState,
+  action: ComparisonPageAction,
+): ComparisonPageState {
+  switch (action.type) {
+    case "ROUTE_CHANGED":
+      if (!action.baseline || !action.candidate) {
+        return {
+          baseline: action.baseline,
+          candidate: action.candidate,
+          comparison: null,
+          error: "Two verified run IDs or receipt hashes are required.",
+          loading: false,
+        }
+      }
+      return {
+        baseline: action.baseline,
+        candidate: action.candidate,
+        comparison: null,
+        error: "",
+        loading: true,
+      }
+    case "FETCH_SUCCESS":
+      if (
+        action.baseline !== state.baseline ||
+        action.candidate !== state.candidate
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        comparison: action.comparison,
+        error: "",
+        loading: false,
+      }
+    case "FETCH_ERROR":
+      if (
+        action.baseline !== state.baseline ||
+        action.candidate !== state.candidate
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        comparison: null,
+        error: action.error,
+        loading: false,
+      }
+    default:
+      return state
+  }
+}
+
+export function getActiveComparisonState(
+  state: ComparisonPageState,
+  currentBaseline?: string,
+  currentCandidate?: string,
+): ComparisonPageState {
+  if (
+    state.baseline !== currentBaseline ||
+    state.candidate !== currentCandidate
+  ) {
+    if (!currentBaseline || !currentCandidate) {
+      return {
+        baseline: currentBaseline,
+        candidate: currentCandidate,
+        comparison: null,
+        error: "Two verified run IDs or receipt hashes are required.",
+        loading: false,
+      }
+    }
+    return {
+      baseline: currentBaseline,
+      candidate: currentCandidate,
+      comparison: null,
+      error: "",
+      loading: true,
+    }
+  }
+  return state
+}
+
 export function ComparisonPage() {
   const { baseline, candidate } = useParams()
-  const [comparison, setComparison] = React.useState<ComparisonResult | null>(
-    null,
+  const [state, dispatch] = React.useReducer(
+    comparisonPageReducer,
+    initialComparisonPageState,
   )
-  const [error, setError] = React.useState("")
+  const activeState = getActiveComparisonState(state, baseline, candidate)
   const [copyLabel, setCopyLabel] = React.useState("Copy comparison URL")
 
   React.useEffect(() => {
+    dispatch({ type: "ROUTE_CHANGED", baseline, candidate })
     if (!baseline || !candidate) {
-      setError("Two verified run IDs or receipt hashes are required.")
       return
     }
     let cancelled = false
     void getComparison(baseline, candidate)
       .then((result) => {
-        if (!cancelled) setComparison(result)
+        if (!cancelled) {
+          dispatch({
+            type: "FETCH_SUCCESS",
+            baseline,
+            candidate,
+            comparison: result,
+          })
+        }
       })
       .catch((requestError) => {
         if (!cancelled) {
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Comparison could not be loaded.",
-          )
+          dispatch({
+            type: "FETCH_ERROR",
+            baseline,
+            candidate,
+            error:
+              requestError instanceof Error
+                ? requestError.message
+                : "Comparison could not be loaded.",
+          })
         }
       })
     return () => {
@@ -49,30 +174,30 @@ export function ComparisonPage() {
   }
 
   const downloadJson = () => {
-    if (!comparison) return
-    const payload = JSON.stringify(comparison, null, 2)
+    if (!activeState.comparison) return
+    const payload = JSON.stringify(activeState.comparison, null, 2)
     const url = URL.createObjectURL(
       new Blob([payload], { type: "application/json" }),
     )
     const anchor = document.createElement("a")
     anchor.href = url
-    anchor.download = `proofrunner-comparison-${comparison.id}.json`
+    anchor.download = `proofrunner-comparison-${activeState.comparison.id}.json`
     anchor.click()
     URL.revokeObjectURL(url)
   }
 
-  if (error) {
+  if (activeState.error) {
     return (
       <div className="container mx-auto max-w-3xl px-4 py-16">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Comparison unavailable</AlertTitle>
-          <AlertDescription className="break-all">{error}</AlertDescription>
+          <AlertDescription className="break-all">{activeState.error}</AlertDescription>
         </Alert>
       </div>
     )
   }
-  if (!comparison) {
+  if (!activeState.comparison) {
     return (
       <div className="container mx-auto flex max-w-3xl items-center gap-3 px-4 py-16 text-slate-300">
         <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
@@ -92,7 +217,7 @@ export function ComparisonPage() {
             Evidence changed between commits
           </h1>
           <p className="mt-2 break-all text-sm text-slate-400">
-            {comparison.compatibility.repositoryUrl}
+            {activeState.comparison.compatibility.repositoryUrl}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -118,7 +243,7 @@ export function ComparisonPage() {
           </Button>
         </div>
       </div>
-      <ComparisonResults comparison={comparison} />
+      <ComparisonResults comparison={activeState.comparison} />
     </div>
   )
 }

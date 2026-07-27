@@ -107,8 +107,8 @@ const compatibilityReasons = (
   return reasons;
 };
 
-const problematic = (outcome: NormalizedCheck["outcome"]): boolean =>
-  outcome === "FAILED" || outcome === "INCONCLUSIVE";
+const isNonPassing = (outcome: NormalizedCheck["outcome"]): boolean =>
+  outcome === "FAILED" || outcome === "INCONCLUSIVE" || outcome === "SKIPPED";
 
 const compareChecks = (
   baseline: SignedReceipt,
@@ -146,9 +146,9 @@ const compareChecks = (
     }
 
     const classification =
-      problematic(left.outcome) && !problematic(right.outcome)
+      isNonPassing(left.outcome) && !isNonPassing(right.outcome)
         ? "RESOLVED"
-        : !problematic(left.outcome) && problematic(right.outcome)
+        : !isNonPassing(left.outcome) && isNonPassing(right.outcome)
           ? "NEW"
           : "UNCHANGED";
     return {

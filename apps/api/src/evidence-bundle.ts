@@ -1481,15 +1481,18 @@ export class EvidenceBundleService {
       throw new Error("The receipt key is not available for bundle signing");
     }
     const run = this.runs.get(stored.receipt.payload.report.runId);
+    const rawLogs: RawLogState = stored.isPublic
+      ? this.receiptStore.rawLogs(
+          stored.receipt.payload.report.runId,
+          now,
+        )
+      : { kind: "unavailable" };
     return createEvidenceBundle({
       receipt: stored.receipt,
       ...(run?.request.verificationContract
         ? { verificationContract: run.request.verificationContract }
         : {}),
-      rawLogs: this.receiptStore.rawLogs(
-        stored.receipt.payload.report.runId,
-        now,
-      ),
+      rawLogs,
       signer,
     });
   }

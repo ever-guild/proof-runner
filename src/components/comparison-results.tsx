@@ -63,7 +63,7 @@ export function ComparisonResults({
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-indigo-300" />
             <div>
-              <CardTitle className="text-lg">Compatible signed evidence</CardTitle>
+              <CardTitle as="h2" className="text-lg">Compatible signed evidence</CardTitle>
               <p className="mt-1 text-xs text-slate-400">
                 Same repository, contract, skill, and runtime image.
               </p>
@@ -81,7 +81,7 @@ export function ComparisonResults({
         <CardHeader className="border-b border-white/5">
           <div className="flex items-center gap-3">
             <GitCompareArrows className="h-5 w-5 text-indigo-300" />
-            <CardTitle className="text-lg">Check changes</CardTitle>
+            <CardTitle as="h2" className="text-lg">Check changes</CardTitle>
           </div>
           <div className="flex flex-wrap gap-2 pt-3">
             {comparison.driftLabels.length === 0 ? (
