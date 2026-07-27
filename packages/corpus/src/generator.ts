@@ -255,6 +255,17 @@ export function generateAllCases(baseDir: string) {
     fixed: { status: "COMPLETED", verdict: "PASS", reason: "NONE" },
   });
 
+  // 51-56 New Research Synthetic Sandbox Expansion (from synthetic-sandbox-expansion.yaml)
+  addCase("prvc.synthetic.sandbox.node.sandbox-symlink-escape-v1", "Symlink traversal cannot read a host/workspace-external canary", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "FILESYSTEM_POLICY_BLOCK" } });
+  addCase("prvc.synthetic.sandbox.node.resource-memory-cgroup-v1", "Bounded Buffer allocation is stopped by cgroups v2 memory limit", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "RESOURCE_EXHAUSTED", verdict: "INCONCLUSIVE", reason: "MEMORY_LIMIT" } });
+  addCase("prvc.synthetic.sandbox.node.resource-pids-cgroup-v1", "Bounded child-process burst is stopped by pids.max", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "RESOURCE_EXHAUSTED", verdict: "INCONCLUSIVE", reason: "PID_LIMIT" } });
+  // The current public API records a cancelled runner execution as COMPLETED
+  // with an INCONCLUSIVE/CANCELLED report; CANCELLED is not a public terminal
+  // RunStatus yet. Keep the oracle aligned with that product contract.
+  addCase("prvc.synthetic.sandbox.node.process-signal-cleanup-v1", "Supervisor termination and cleanup on SIGTERM then SIGKILL escalation", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "COMPLETED", verdict: "INCONCLUSIVE", reason: "CANCELLED" } });
+  addCase("prvc.synthetic.sandbox.node.sandbox-kernel-surfaces-v1", "No privileged eBPF, Docker API, host proc, or writable sys access", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "SANDBOX_FAILURE" } });
+  addCase("prvc.synthetic.sandbox.node.sandbox-egress-controlled-v1", "Verification phase cannot contact controlled egress sink", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "NETWORK_POLICY_BLOCK" } });
+
   // Clean stale case directories that are no longer defined
   const validCaseIds = new Set(caseDefinitions.map((c) => c.caseObj.case_id));
   if (existsSync(casesDir)) {
@@ -302,7 +313,9 @@ export function generateAllCases(baseDir: string) {
   writeFileSync(join(indexDir, "cases.jsonl"), casesJsonlLines.join("\n") + "\n", "utf8");
   writeFileSync(join(indexDir, "variants.jsonl"), variantsJsonlLines.join("\n") + "\n", "utf8");
 
-  // Helper to build a valid candidate record matching candidate-record.schema.json
+  // Candidate records describe reproducible bug-pair materializations.  A
+  // single-variant conformance case is part of the corpus, but it is not a
+  // candidate bug pair and must not be fabricated as one.
   function makeCandidateRecord(caseObj: PrvcCase, oracleObj: PrvcOracle) {
     const candSlug = caseObj.case_id.replace(/^prvc\./, "");
     const candId = `candidate.${candSlug}`;
@@ -314,9 +327,14 @@ export function generateAllCases(baseDir: string) {
       };
     }
 
-    const firstVarName = Object.keys(oracleObj.variants)[0] || "default";
-    const buggyVarName = oracleObj.variants["buggy"] ? "buggy" : firstVarName;
+    const buggyVarName = "buggy";
     const failingTests = oracleObj.variants[buggyVarName]?.expected.tests?.failing_exact || ["test failure"];
+
+    const candidateVariants = {
+      buggy: variantsCandidate.buggy,
+      fixed: variantsCandidate.fixed,
+    };
+    const buggyVerdict = oracleObj.variants[buggyVarName]?.expected.verdict ?? "INCONCLUSIVE";
 
     return {
       schema_version: "prvc.candidate/v2",
@@ -338,12 +356,9 @@ export function generateAllCases(baseDir: string) {
         container_image_digest: VALID_OCI_DIGEST,
         network_policy: "disabled",
       },
-      variants: {
-        buggy: variantsCandidate["buggy"] || variantsCandidate["default"],
-        fixed: variantsCandidate["fixed"] || variantsCandidate["default"],
-      },
+      variants: candidateVariants,
       oracle: {
-        buggy_verdict: oracleObj.variants[buggyVarName]?.expected.verdict === "PASS" ? "FAIL" : oracleObj.variants[buggyVarName]?.expected.verdict,
+        buggy_verdict: buggyVerdict,
         fixed_verdict: "PASS",
         failing_tests_exact: failingTests,
       },
@@ -361,10 +376,9 @@ export function generateAllCases(baseDir: string) {
     };
   }
 
-  // Generate 50 candidate records matching all 50 cases 1:1!
-  const candidateRecords = caseDefinitions.map(({ caseObj, oracleObj }) =>
-    makeCandidateRecord(caseObj, oracleObj)
-  );
+  const candidateRecords = caseDefinitions
+    .filter(({ oracleObj }) => "buggy" in oracleObj.variants && "fixed" in oracleObj.variants)
+    .map(({ caseObj, oracleObj }) => makeCandidateRecord(caseObj, oracleObj));
 
   writeFileSync(join(indexDir, "candidates.jsonl"), candidateRecords.map((c) => JSON.stringify(c)).join("\n") + "\n", "utf8");
 
@@ -439,20 +453,35 @@ export function generateAllCases(baseDir: string) {
   writeFileSync(join(signaturesDir, "release-manifest.sig"), signatureHex, "utf8");
   writeFileSync(join(signaturesDir, "release-key.pub"), pubKeyPem, "utf8");
 
-  // Compute hashes for ALL normative files for SHA256SUMS (excluding manifests/SHA256SUMS and signatures)
-  const allNormativeHashes: string[] = [...checksumLines];
-  for (const dirName of ["schemas", "vocabulary", "suites", "profiles", "index", "manifests", "quarantine"]) {
-    const dPath = join(baseDir, dirName);
-    if (existsSync(dPath)) {
-      const files = (readdirSync(dPath, { recursive: true }) as string[]).sort();
+  writeFileSync(
+    join(quarantineDir, "README.md"),
+    "# PRVC Quarantine Directory\n\nNo quarantine observations are recorded without run evidence.\n",
+    "utf8"
+  );
+
+  // All normative files must exist before checksums are calculated.
+  generateSha256Sums(baseDir);
+
+  return { totalCases: caseDefinitions.length, totalVariants: variantsJsonlLines.length };
+}
+
+export function generateSha256Sums(baseDir: string): void {
+  const manifestsDir = join(baseDir, "manifests");
+  const checksumLines: string[] = [];
+
+  const casesDir = join(baseDir, "cases");
+  if (existsSync(casesDir)) {
+    const cases = readdirSync(casesDir).sort();
+    for (const cId of cases) {
+      const cDir = join(casesDir, cId);
+      const files = (readdirSync(cDir, { recursive: true }) as string[]).sort();
       for (const f of files) {
-        if (f.includes("SHA256SUMS") || f.startsWith("signatures")) continue;
-        const fullP = join(dPath, f);
+        const fullP = join(cDir, f);
         if (existsSync(fullP)) {
           try {
             const content = readFileSync(fullP);
             const h = createHash("sha256").update(content).digest("hex");
-            allNormativeHashes.push(`${h}  ${dirName}/${f}`);
+            checksumLines.push(`${h}  cases/${cId}/${f}`);
           } catch {
             // skip directories
           }
@@ -461,13 +490,27 @@ export function generateAllCases(baseDir: string) {
     }
   }
 
-  writeFileSync(join(manifestsDir, "SHA256SUMS"), allNormativeHashes.join("\n") + "\n", "utf8");
+  for (const dirName of ["schemas", "vocabulary", "suites", "profiles", "index", "manifests", "quarantine"]) {
+    const dPath = join(baseDir, dirName);
+    if (existsSync(dPath)) {
+      const files = (readdirSync(dPath, { recursive: true }) as string[]).sort();
+      for (const f of files) {
+        // SHA256SUMS cannot verify itself. Signatures use a distinct
+        // verification path and are intentionally excluded from this manifest.
+        if (dirName === "manifests" && (f === "SHA256SUMS" || f.startsWith("signatures/"))) continue;
+        const fullP = join(dPath, f);
+        if (existsSync(fullP)) {
+          try {
+            const content = readFileSync(fullP);
+            const h = createHash("sha256").update(content).digest("hex");
+            checksumLines.push(`${h}  ${dirName}/${f}`);
+          } catch {
+            // skip directories
+          }
+        }
+      }
+    }
+  }
 
-  writeFileSync(
-    join(quarantineDir, "README.md"),
-    "# PRVC Quarantine Directory\n\nNo quarantine observations are recorded without run evidence.\n",
-    "utf8"
-  );
-
-  return { totalCases: caseDefinitions.length, totalVariants: variantsJsonlLines.length };
+  writeFileSync(join(manifestsDir, "SHA256SUMS"), checksumLines.join("\n") + "\n", "utf8");
 }

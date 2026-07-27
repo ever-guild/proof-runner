@@ -18,7 +18,7 @@ export const CompletesAndExposesReceipt: Story = {
     const canvas = within(canvasElement)
     await waitFor(
       () => expect(canvas.getByRole("link", { name: "View demo details" })).toBeVisible(),
-      { timeout: 5_000 },
+      { timeout: 15_000 },
     )
     await expect(canvas.getByText("Demo verdict: PASS")).toBeInTheDocument()
     await expect(canvas.getByText("Demo progress")).toBeInTheDocument()

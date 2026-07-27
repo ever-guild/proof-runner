@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createPublicKey, verify } from "node:crypto";
 import { generateAllCases } from "../src/generator.js";
 
@@ -11,15 +12,15 @@ describe("PRVC Dataset Generator", () => {
     generateAllCases(prvcDir);
   });
 
-  it("should generate 50 logical cases and 59 execution variants", () => {
+  it("should generate 56 logical cases and 65 execution variants", () => {
     const casesJsonl = readFileSync(join(prvcDir, "index", "cases.jsonl"), "utf8");
     const variantsJsonl = readFileSync(join(prvcDir, "index", "variants.jsonl"), "utf8");
 
     const cases = casesJsonl.trim().split("\n");
     const variants = variantsJsonl.trim().split("\n");
 
-    expect(cases.length).toBe(50);
-    expect(variants.length).toBe(59);
+    expect(cases.length).toBe(56);
+    expect(variants.length).toBe(65);
   });
 
   it("should generate release manifest with IMPORTED status for smoke suite", () => {
@@ -28,8 +29,8 @@ describe("PRVC Dataset Generator", () => {
 
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     expect(manifest.prvc_version).toBe("0.1.0");
-    expect(manifest.total_cases).toBe(50);
-    expect(manifest.total_variants).toBe(59);
+    expect(manifest.total_cases).toBe(56);
+    expect(manifest.total_variants).toBe(65);
     expect(manifest.level).toBe("IMPORTED");
     expect(manifest.fixture_signature).toMatchObject({
       purpose: "reproducible fixture integrity only",
@@ -44,15 +45,15 @@ describe("PRVC Dataset Generator", () => {
     const cert = JSON.parse(readFileSync(certPath, "utf8"));
     expect(cert.schema_version).toBe("prvc.certification/v1");
     expect(cert.level).toBe("IMPORTED");
-    expect(cert.summary.total_cases).toBe(50);
+    expect(cert.summary.total_cases).toBe(56);
   });
 
-  it("should generate candidate index matching candidates.jsonl with 50 candidate records matching all 50 cases 1:1", () => {
+  it("should generate candidate records only for actual buggy/fixed case pairs", () => {
     const candPath = join(prvcDir, "index", "candidates.jsonl");
     expect(existsSync(candPath)).toBe(true);
 
     const candidates = readFileSync(candPath, "utf8").trim().split("\n");
-    expect(candidates.length).toBe(50);
+    expect(candidates.length).toBe(9);
 
     for (const candLine of candidates) {
       const cand = JSON.parse(candLine);
@@ -75,6 +76,18 @@ describe("PRVC Dataset Generator", () => {
     }
   });
 
+  it("writes complete, idempotent checksum manifests", () => {
+    const sumsPath = join(prvcDir, "manifests", "SHA256SUMS");
+    const first = readFileSync(sumsPath, "utf8");
+    generateAllCases(prvcDir);
+    const second = readFileSync(sumsPath, "utf8");
+
+    expect(second).toBe(first);
+    expect(second).not.toContain("  manifests/SHA256SUMS\n");
+    expect(second).toContain("  quarantine/README.md\n");
+    expect(execFileSync("sha256sum", ["-c", "manifests/SHA256SUMS"], { cwd: prvcDir, encoding: "utf8" })).not.toContain("FAILED");
+  });
+
   it("should create adapters/ and generators/ directories", () => {
     expect(existsSync(join(prvcDir, "adapters", "README.md"))).toBe(true);
     expect(existsSync(join(prvcDir, "generators", "README.md"))).toBe(true);
@@ -95,7 +108,7 @@ describe("PRVC Dataset Generator", () => {
     const selection = JSON.parse(readFileSync(join(prvcDir, "quarantine", "selection-report.json"), "utf8"));
     expect(selection).toEqual({
       schema_version: "prvc.selection-report/v1",
-      candidates: 50,
+      candidates: 9,
       reproduced: 0,
       gold: 0,
       quarantined: 0,

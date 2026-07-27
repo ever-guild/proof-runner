@@ -19,7 +19,7 @@
             "type": "object",
             "required": ["terminal_status", "verdict", "reason_code"],
             "properties": {
-              "terminal_status": { "type": "string", "enum": ["COMPLETED", "TIMEOUT", "RESOURCE_EXHAUSTED", "POLICY_BLOCKED", "SYSTEM_ERROR", "REJECTED"] },
+              "terminal_status": { "type": "string", "enum": ["COMPLETED", "TIMEOUT", "RESOURCE_EXHAUSTED", "POLICY_BLOCKED", "SYSTEM_ERROR", "CANCELLED", "REJECTED"] },
               "verdict": { "type": "string", "enum": ["PASS", "FAIL", "INCONCLUSIVE"] },
               "reason_code": { "type": "string" },
               "stages": { "type": "object" },

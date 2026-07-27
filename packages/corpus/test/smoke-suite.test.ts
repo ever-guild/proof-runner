@@ -14,14 +14,14 @@ describe("PRVC 0.1.0 Hackathon Smoke Suite End-to-End Validation", () => {
     generateAllCases(prvcDir);
   });
 
-  it("should validate all 50 cases defined in smoke.yaml", () => {
+  it("should validate all 56 cases defined in smoke.yaml", () => {
     const smokePath = join(prvcDir, "suites", "smoke.yaml");
     expect(existsSync(smokePath)).toBe(true);
 
     const smokeContent = readFileSync(smokePath, "utf8");
     const smokeObj = jsyaml.load(smokeContent) as { cases: string[] };
 
-    expect(smokeObj.cases.length).toBe(50);
+    expect(smokeObj.cases.length).toBe(56);
 
     for (const caseId of smokeObj.cases) {
       const caseFile = join(prvcDir, "cases", caseId, "case.yaml");

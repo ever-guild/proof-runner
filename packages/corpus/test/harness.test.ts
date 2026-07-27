@@ -18,7 +18,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should evaluate report matching expected PASS oracle with stages and minimum executed checks", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       variants: {
         default: {
           expected: {
@@ -56,7 +56,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should fail evaluateReport when required passing test is missing or minimum executed threshold fails", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-pass-001",
+      case_id: "prvc.synthetic.node.javascript.core-pass-001",
       variants: {
         default: {
           expected: {
@@ -94,7 +94,7 @@ describe("Reference Harness & Protocol Validation", () => {
   it("should detect discrepancy when expected FAIL receives PASS report (False PASS prevention)", () => {
     const oracle: PrvcOracle = {
       schema_version: "prvc.oracle/v1",
-      case_id: "prvc.synthetic.node.core-fail-test-003",
+      case_id: "prvc.synthetic.node.javascript.core-fail-test-003",
       variants: {
         default: {
           expected: {
@@ -289,6 +289,31 @@ describe("Reference Harness & Protocol Validation", () => {
     expect(existsSync(tmpDir)).toBe(true);
     expect(existsSync(join(tmpDir, "package.json"))).toBe(false);
     rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("refuses to fabricate fixtures for imported candidate cases", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-imported-candidate");
+
+    expect(() =>
+      harness.materializeFixture("prvc.real.pbv.javascript.express-037", "buggy", tmpDir),
+    ).toThrow(/require source provenance and a reproducible recipe/);
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
+  it("rejects typoed case identifiers instead of suffix-matching a fixture", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-typo");
+    expect(() =>
+      harness.materializeFixture("prvc.synthetic.node.javascript.core-empty-repo-010", "default", tmpDir),
+    ).toThrow(/Unknown PRVC case\/variant/);
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
+  it("refuses sandbox materialization without a target-runner adapter", () => {
+    const tmpDir = join(__dirname, "..", "tmp-test-fixture-sandbox");
+    expect(() =>
+      harness.materializeFixture("prvc.synthetic.sandbox.node.resource-memory-cgroup-v1", "default", tmpDir),
+    ).toThrow(/require a target-runner adapter and live execution evidence/);
+    expect(existsSync(tmpDir)).toBe(false);
   });
 
   it("should verify sandbox teardown with no residual files", () => {

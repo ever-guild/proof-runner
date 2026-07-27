@@ -127,6 +127,16 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
 
   // Track which caseId/variant each submitted run maps to
   const runOracleMap = new Map<string, { oracle: PrvcOracle; variant: string }>();
+  let commitSequence = 0;
+
+  const registerOracle = (caseId: string, variant: string) => {
+    const oracle = caseOracles.get(caseId);
+    if (!oracle) throw new Error(`Missing oracle for ${caseId}`);
+
+    const commitSha = (++commitSequence).toString(16).padStart(40, "0");
+    runOracleMap.set(commitSha, { oracle, variant });
+    return { oracle, commitSha };
+  };
 
   beforeAll(async () => {
     // Generate corpus
@@ -217,7 +227,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
         await new Promise((r) => setTimeout(r, 20));
 
         // Find the oracle for this run
-        const mapping = runOracleMap.get(runId);
+        const mapping = runOracleMap.get(runId) ?? runOracleMap.get(verify.resolvedCommitSha);
         if (!mapping) {
           return {
             status: "SYSTEM_ERROR" as const,
@@ -300,7 +310,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
 
   it("end-to-end PASS case: submit → dispatch → result → receipt", async () => {
     const caseId = "prvc.synthetic.node.core-pass-001";
-    const oracle = caseOracles.get(caseId)!;
+    const { oracle, commitSha } = registerOracle(caseId, "default");
 
     // Submit
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
@@ -312,8 +322,8 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
       body: JSON.stringify({
         contractVersion: CONTRACT_VERSION,
         repositoryUrl: "https://github.com/acme/example",
-        resolvedCommitSha: sha,
-        resolvedRef: { type: "commit", value: sha },
+        resolvedCommitSha: commitSha,
+        resolvedRef: { type: "commit", value: commitSha },
         skill: { name: "node-typescript", version: "1", hash },
         public: false,
       }),
@@ -321,8 +331,6 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
     expect(verifyRes.status).toBe(202);
     const { run } = (await verifyRes.json()) as any;
     const runId = run.id;
-
-    // Register oracle mapping for this runId
     runOracleMap.set(runId, { oracle, variant: "default" });
 
     // Wait for runner to process
@@ -343,7 +351,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
 
   it("end-to-end FAIL case: test failure detected", async () => {
     const caseId = "prvc.synthetic.node.core-fail-test-003";
-    const oracle = caseOracles.get(caseId)!;
+    const { oracle, commitSha } = registerOracle(caseId, "default");
 
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
       method: "POST",
@@ -354,8 +362,8 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
       body: JSON.stringify({
         contractVersion: CONTRACT_VERSION,
         repositoryUrl: "https://github.com/acme/example",
-        resolvedCommitSha: sha,
-        resolvedRef: { type: "commit", value: sha },
+        resolvedCommitSha: commitSha,
+        resolvedRef: { type: "commit", value: commitSha },
         skill: { name: "node-typescript", version: "1", hash },
         public: false,
       }),
@@ -375,7 +383,7 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
 
   it("end-to-end SYSTEM_ERROR case: sandbox policy block", async () => {
     const caseId = "prvc.synthetic.node.sandbox-secret-env-017";
-    const oracle = caseOracles.get(caseId)!;
+    const { oracle, commitSha } = registerOracle(caseId, "default");
 
     const verifyRes = await fetch(`${apiBase}/api/verify`, {
       method: "POST",
@@ -386,8 +394,8 @@ describe("PRVC Integration: Smoke Cases via ProofRunner HTTP API", () => {
       body: JSON.stringify({
         contractVersion: CONTRACT_VERSION,
         repositoryUrl: "https://github.com/acme/example",
-        resolvedCommitSha: sha,
-        resolvedRef: { type: "commit", value: sha },
+        resolvedCommitSha: commitSha,
+        resolvedRef: { type: "commit", value: commitSha },
         skill: { name: "node-typescript", version: "1", hash },
         public: false,
       }),
