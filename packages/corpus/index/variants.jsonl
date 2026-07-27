@@ -60,6 +60,6 @@
 {"case_id":"prvc.synthetic.sandbox.node.sandbox-symlink-escape-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"POLICY_BLOCKED"}
 {"case_id":"prvc.synthetic.sandbox.node.resource-memory-cgroup-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"RESOURCE_EXHAUSTED"}
 {"case_id":"prvc.synthetic.sandbox.node.resource-pids-cgroup-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"RESOURCE_EXHAUSTED"}
-{"case_id":"prvc.synthetic.sandbox.node.process-signal-cleanup-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"CANCELLED"}
+{"case_id":"prvc.synthetic.sandbox.node.process-signal-cleanup-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"COMPLETED"}
 {"case_id":"prvc.synthetic.sandbox.node.sandbox-kernel-surfaces-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"POLICY_BLOCKED"}
 {"case_id":"prvc.synthetic.sandbox.node.sandbox-egress-controlled-v1","variant":"default","git_ref":null,"expected_verdict":"INCONCLUSIVE","expected_status":"POLICY_BLOCKED"}

@@ -259,7 +259,10 @@ export function generateAllCases(baseDir: string) {
   addCase("prvc.synthetic.sandbox.node.sandbox-symlink-escape-v1", "Symlink traversal cannot read a host/workspace-external canary", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "FILESYSTEM_POLICY_BLOCK" } });
   addCase("prvc.synthetic.sandbox.node.resource-memory-cgroup-v1", "Bounded Buffer allocation is stopped by cgroups v2 memory limit", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "RESOURCE_EXHAUSTED", verdict: "INCONCLUSIVE", reason: "MEMORY_LIMIT" } });
   addCase("prvc.synthetic.sandbox.node.resource-pids-cgroup-v1", "Bounded child-process burst is stopped by pids.max", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "RESOURCE_EXHAUSTED", verdict: "INCONCLUSIVE", reason: "PID_LIMIT" } });
-  addCase("prvc.synthetic.sandbox.node.process-signal-cleanup-v1", "Supervisor termination and cleanup on SIGTERM then SIGKILL escalation", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "CANCELLED", verdict: "INCONCLUSIVE", reason: "CANCELLED" } });
+  // The current public API records a cancelled runner execution as COMPLETED
+  // with an INCONCLUSIVE/CANCELLED report; CANCELLED is not a public terminal
+  // RunStatus yet. Keep the oracle aligned with that product contract.
+  addCase("prvc.synthetic.sandbox.node.process-signal-cleanup-v1", "Supervisor termination and cleanup on SIGTERM then SIGKILL escalation", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "COMPLETED", verdict: "INCONCLUSIVE", reason: "CANCELLED" } });
   addCase("prvc.synthetic.sandbox.node.sandbox-kernel-surfaces-v1", "No privileged eBPF, Docker API, host proc, or writable sys access", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "SANDBOX_FAILURE" } });
   addCase("prvc.synthetic.sandbox.node.sandbox-egress-controlled-v1", "Verification phase cannot contact controlled egress sink", "sandbox", "synthetic", "javascript", "npm", "node-npm/v1", { default: { status: "POLICY_BLOCKED", verdict: "INCONCLUSIVE", reason: "NETWORK_POLICY_BLOCK" } });
 

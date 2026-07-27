@@ -4,5 +4,5 @@ variants:
   default:
     expected:
       reason_code: CANCELLED
-      terminal_status: CANCELLED
+      terminal_status: COMPLETED
       verdict: INCONCLUSIVE
