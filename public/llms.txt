@@ -2,7 +2,7 @@
 
 Independent execution verification for agent-generated software.
 
-Status: Public service is live in free mode.
+Status: Production launch configuration targets the free service below.
 
 ## Human and agent surfaces
 

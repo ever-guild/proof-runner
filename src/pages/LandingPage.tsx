@@ -251,7 +251,7 @@ export function LandingPage() {
           <div className="flex-1 space-y-6">
             <Badge variant="queued" showIcon={false} className="mb-2 border-white/20 text-slate-300"><Bot className="w-3 h-3 mr-2 inline text-indigo-400" /> A2MCP</Badge>
             <h2 className="text-3xl font-bold text-white">Built for agents, not just browsers</h2>
-            <p className="text-slate-300 leading-relaxed">Use the A2MCP contract to inspect a repository, start a run, poll normalized status, and consume a signed receipt as structured JSON. The launch service operates in free mode; paid x402 mode is not enabled.</p>
+            <p className="text-slate-300 leading-relaxed">Use the A2MCP contract to inspect a repository, start a run, poll normalized status, and consume a signed receipt as structured JSON. The launch configuration uses free mode; paid x402 mode is not enabled.</p>
             <div className="flex gap-4 pt-4">
               <Button asChild variant="secondary" className="font-semibold text-white border-white/20"><a href="/skill.md">Open skill.md</a></Button>
               <Button asChild variant="ghost" className="font-semibold text-slate-300"><a href="/llms.txt">Open llms.txt</a></Button>

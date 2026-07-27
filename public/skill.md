@@ -5,7 +5,7 @@ description: Inspect a public GitHub repository and verify an exact commit with 
 
 # ProofRunner integration contract
 
-ProofRunner is publicly available in free mode.
+Production launch configuration uses free mode.
 
 Base URL: `https://proof.ever-guild.net`
 
@@ -118,7 +118,7 @@ To verify a signed receipt:
 - Agent routes are `POST /a2mcp/inspect_repository` and
   `POST /a2mcp/verify_repository`. The A2MCP verification request carries an
   `idempotencyKey` in its JSON body.
-- The launch service runs in free HTTP 200 mode. Paid x402 mode is not enabled.
+- The launch configuration uses free HTTP 200 mode. Paid x402 mode is not enabled.
 - `verify_repository` starts execution and returns a run ID plus poll URL.
   Poll until `COMPLETED`, `TIMEOUT`, or `SYSTEM_ERROR`; a signed receipt URL is
   added when execution terminates.

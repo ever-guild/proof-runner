@@ -78,7 +78,7 @@ describe("agent discovery & public metadata files", () => {
 
     // Launch availability and receipt semantics
     expect(content).toContain("https://proof.ever-guild.net")
-    expect(content).toContain("Paid x402 mode is not enabled.")
+    expect(content).toContain("Production launch configuration uses free mode.")
     expect(content).toContain("when a receipt has been issued")
     expect(content).not.toContain('"1.0.0"')
   })
@@ -119,7 +119,7 @@ describe("agent discovery & public metadata files", () => {
     expect(content).toContain("Verify `receipt.signature` using Ed25519 over canonicalized payload bytes against fetched `publicKey`")
     expect(content).not.toMatch(/verify Ed25519 signature over .* payload hash/i)
 
-    expect(content).toContain("Status: Public service is live in free mode.")
+    expect(content).toContain("Status: Production launch configuration targets the free service below.")
     expect(content).toContain("Paid x402 mode is not enabled.")
     expect(content).toContain("Timeout is never FAIL")
     expect(content).not.toContain('"1.0.0"')
