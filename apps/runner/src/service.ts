@@ -58,6 +58,10 @@ interface StoredRun {
   abort: AbortController;
 }
 
+type RunnerSandbox = Pick<DockerSandbox, "execute"> & {
+  runtimeImageDigest?: () => Promise<string>;
+};
+
 const sameResult = (
   left: InternalResultDeliveryRequest,
   right: InternalResultDeliveryRequest,
@@ -76,7 +80,7 @@ export class RunnerService {
 
   constructor(
     readonly config: RunnerConfig,
-    private readonly sandbox: Pick<DockerSandbox, "execute"> = new DockerSandbox(
+    private readonly sandbox: RunnerSandbox = new DockerSandbox(
       config,
     ),
     private readonly callback: ApiCallbackClient | null = config.apiCallbackUrl
@@ -281,23 +285,50 @@ export class RunnerService {
     heartbeat.unref();
     let execution: SandboxExecution;
     try {
-      execution = await this.sandbox.execute(run.dispatch.runId, run.dispatch.request, {
-        signal: run.abort.signal,
-        assertActive: () => {
-          if (run.cancellationRequested) {
-            throw new RunnerError("CANCELLED", "Run was cancelled");
-          }
-          if (Date.now() >= new Date(run.leaseExpiresAt).getTime()) {
-            run.cancellationRequested = true;
-            run.abort.abort();
-            throw new RunnerError("LEASE_EXPIRED", "Run lease expired");
-          }
-        },
-        onStage: (stage) => {
-          run.activeStage = stage;
-          notifyHeartbeat();
-        },
-      });
+      const expectedRuntimeDigest =
+        run.dispatch.request.verificationContract?.subject.runtimeImageDigest;
+      const actualRuntimeDigest =
+        expectedRuntimeDigest !== undefined && this.sandbox.runtimeImageDigest
+          ? await this.sandbox.runtimeImageDigest()
+          : null;
+      if (
+        expectedRuntimeDigest !== undefined &&
+        actualRuntimeDigest !== null &&
+        actualRuntimeDigest !== expectedRuntimeDigest
+      ) {
+        execution = {
+          status: "SYSTEM_ERROR",
+          report: null,
+          systemError: {
+            code: "RUNTIME_IMAGE_MISMATCH",
+            message:
+              "The configured runtime image does not match the verification contract.",
+            retryable: false,
+          },
+        };
+      } else {
+        execution = await this.sandbox.execute(
+          run.dispatch.runId,
+          run.dispatch.request,
+          {
+            signal: run.abort.signal,
+            assertActive: () => {
+              if (run.cancellationRequested) {
+                throw new RunnerError("CANCELLED", "Run was cancelled");
+              }
+              if (Date.now() >= new Date(run.leaseExpiresAt).getTime()) {
+                run.cancellationRequested = true;
+                run.abort.abort();
+                throw new RunnerError("LEASE_EXPIRED", "Run lease expired");
+              }
+            },
+            onStage: (stage) => {
+              run.activeStage = stage;
+              notifyHeartbeat();
+            },
+          },
+        );
+      }
     } catch {
       execution = {
         status: "SYSTEM_ERROR",

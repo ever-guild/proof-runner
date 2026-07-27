@@ -259,6 +259,90 @@ describe("Orchestrator", () => {
     }
   });
 
+  it("stores a runtime contract mismatch as a non-retryable terminal outcome", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "proof-runner-runtime-mismatch-"));
+    directories.push(directory);
+    const store = new RunStore(join(directory, "runs.sqlite"));
+    const expectedRuntimeDigest = `sha256:${"d".repeat(64)}`;
+    const contractRequest: VerifyRequest = {
+      ...request,
+      verificationContract: {
+        version: "1",
+        subject: {
+          repositoryUrl: request.repositoryUrl,
+          resolvedCommitSha: request.resolvedCommitSha,
+          skillHash: request.skill.hash,
+          runtimeImageDigest: expectedRuntimeDigest,
+        },
+        criteria: [{ id: "tests", kind: "test-suite", required: true }],
+        prohibitions: [],
+      },
+    };
+    const created = store.create("runtime-mismatch", contractRequest);
+    if (created.kind !== "created") throw new Error("expected a queued run");
+    const runner = new RecordingRunner();
+    const issue = vi.fn(receipts.issue);
+    const orchestrator = new Orchestrator(store, runner, { issue });
+
+    try {
+      await orchestrator.dispatchNext();
+      const leaseId = runner.dispatched[0]?.lease.leaseId;
+      if (!leaseId) throw new Error("expected a runner dispatch");
+      const completedAt = new Date().toISOString();
+
+      await expect(
+        orchestrator.result(created.run.response.id, {
+          contractVersion: CONTRACT_VERSION,
+          leaseId,
+          completedAt,
+          status: "COMPLETED",
+          report: {
+            contractVersion: CONTRACT_VERSION,
+            runId: created.run.response.id,
+            repositoryUrl: request.repositoryUrl,
+            resolvedCommitSha: request.resolvedCommitSha,
+            resolvedRef: request.resolvedRef,
+            skill: request.skill,
+            runtimeImageDigest: `sha256:${"c".repeat(64)}`,
+            verdict: "PASS",
+            checks: [
+              {
+                id: "test",
+                stage: "TEST",
+                title: "Run tests",
+                outcome: "PASSED",
+                startedAt: completedAt,
+                completedAt,
+                durationMs: 0,
+                exitCode: 0,
+                summary: "All tests passed.",
+              },
+            ],
+            durationMs: 0,
+            completedAt,
+            reasonCode: null,
+          },
+          systemError: null,
+        }),
+      ).resolves.toBe("ACCEPTED");
+
+      expect(issue).not.toHaveBeenCalled();
+      expect(store.get(created.run.response.id)?.response).toMatchObject({
+        status: "SYSTEM_ERROR",
+        verdict: "INCONCLUSIVE",
+        systemError: {
+          code: "RUNTIME_IMAGE_MISMATCH",
+          message:
+            "The configured runtime image does not match the verification contract.",
+          retryable: false,
+        },
+      });
+    } finally {
+      orchestrator.stop();
+      store.close();
+    }
+  });
+
   it("cancels and waits out an ambiguous dispatch before draining the queue", async () => {
     const directory = mkdtempSync(join(tmpdir(), "proof-runner-ambiguous-dispatch-"));
     directories.push(directory);

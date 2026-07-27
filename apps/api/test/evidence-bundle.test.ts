@@ -119,16 +119,12 @@ const sha256 = (data: Buffer | string): string =>
 const canonicalJsonBuffer = (value: unknown): Buffer =>
   Buffer.from(`${canonicalize(value)}\n`, "utf8");
 
-const resignArchiveWithRawLog = (
+const resignArchiveWithRawLogData = (
   archive: Buffer,
-  content: string,
+  logsData: Buffer,
 ): Buffer => {
   const entries = parseEvidenceBundleArchive(archive);
   const files = new Map(entries.map((entry) => [entry.path, entry.data]));
-  const originalLog = JSON.parse(
-    files.get("logs/raw.ndjson")!.toString("utf8").trimEnd(),
-  ) as Record<string, unknown>;
-  const logsData = canonicalJsonBuffer({ ...originalLog, content });
   files.set("logs/raw.ndjson", logsData);
 
   const manifest = EvidenceBundleManifestSchema.parse(
@@ -186,6 +182,19 @@ const resignArchiveWithRawLog = (
       path: entry.path,
       data: files.get(entry.path)!,
     })),
+  );
+};
+
+const resignArchiveWithRawLog = (
+  archive: Buffer,
+  content: string,
+): Buffer => {
+  const originalLog = JSON.parse(
+    filesByPath(archive).get("logs/raw.ndjson")!.toString("utf8").trimEnd(),
+  ) as Record<string, unknown>;
+  return resignArchiveWithRawLogData(
+    archive,
+    canonicalJsonBuffer({ ...originalLog, content }),
   );
 };
 
@@ -1287,6 +1296,40 @@ describe("signed evidence bundles", () => {
     expect(verifyEvidenceBundle(recomputed, keyResolver)).toMatchObject({
       valid: false,
       reason: "INVALID_MANIFEST_SIGNATURE",
+    });
+  });
+
+  it("rejects signed raw-log NDJSON containing malformed UTF-8", () => {
+    const archive = createEvidenceBundle({
+      receipt,
+      rawLogs: {
+        kind: "retained",
+        logs: [
+          {
+            sequence: 0,
+            stream: "stdout",
+            content: "\ufffd",
+            createdAt: "2026-07-26T12:00:00.000Z",
+            expiresAt: "2026-08-26T12:00:00.000Z",
+          },
+        ],
+      },
+      signer,
+    });
+    const originalLog = filesByPath(archive).get("logs/raw.ndjson")!;
+    const replacementBytes = Buffer.from("\ufffd", "utf8");
+    const replacementOffset = originalLog.indexOf(replacementBytes);
+    expect(replacementOffset).toBeGreaterThanOrEqual(0);
+    const malformedLog = Buffer.concat([
+      originalLog.subarray(0, replacementOffset),
+      Buffer.from([0xff]),
+      originalLog.subarray(replacementOffset + replacementBytes.length),
+    ]);
+    const malformed = resignArchiveWithRawLogData(archive, malformedLog);
+
+    expect(verifyEvidenceBundle(malformed, keyResolver)).toMatchObject({
+      valid: false,
+      reason: "MANIFEST_INVALID",
     });
   });
 

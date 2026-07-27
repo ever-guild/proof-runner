@@ -1424,7 +1424,7 @@ export const verifyEvidenceBundle = (
   const logsData = files.get("logs/raw.ndjson");
   if (logsData) {
     try {
-      const text = logsData.toString("utf8");
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(logsData);
       if (!text.endsWith("\n")) throw new Error("NDJSON must end in newline");
       for (const line of text.slice(0, -1).split("\n")) {
         const value = JSON.parse(line) as { content?: unknown };

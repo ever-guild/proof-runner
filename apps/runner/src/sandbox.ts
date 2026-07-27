@@ -150,7 +150,24 @@ export class DockerSandbox {
 
       startCheck(sandboxCheck);
       hooks.onStage?.("SANDBOX");
-      runtimeDigest = await this.runtimeDigest();
+      runtimeDigest = await this.runtimeImageDigest();
+      const expectedRuntimeDigest =
+        request.verificationContract?.subject.runtimeImageDigest;
+      if (
+        expectedRuntimeDigest !== undefined &&
+        runtimeDigest !== expectedRuntimeDigest
+      ) {
+        return {
+          status: "SYSTEM_ERROR",
+          report: null,
+          systemError: {
+            code: "RUNTIME_IMAGE_MISMATCH",
+            message:
+              "The configured runtime image does not match the verification contract.",
+            retryable: false,
+          },
+        };
+      }
       await this.createWorkspaceVolume(workspaceVolume, deadline);
       await this.startWorkspaceKeeper(
         workspaceKeeper,
@@ -391,7 +408,7 @@ export class DockerSandbox {
     return { status, report, systemError: null };
   }
 
-  private async runtimeDigest(): Promise<string> {
+  async runtimeImageDigest(): Promise<string> {
     const result = await this.docker(
       ["image", "inspect", "--format", "{{.Id}}", this.config.runtimeImage],
       Date.now() + 30_000,

@@ -116,6 +116,7 @@ describe("API-to-runner callback bridge", () => {
     const runner = createRunnerServer(
       runnerConfig,
       new RunnerService(runnerConfig, {
+        runtimeImageDigest: async () => `sha256:${"c".repeat(64)}`,
         execute: async (runId, verify, hooks) => {
           executed.push(runId);
           if (executed.length === 1) await firstExecution;
@@ -241,6 +242,49 @@ describe("API-to-runner callback bridge", () => {
       await expect(receipt.json()).resolves.toMatchObject({
         payload: { report: { runId: body.run.id, verdict: "PASS" } },
       });
+
+      const incompatible = await fetch(`${apiUrl}/api/verify`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "bridge-runtime-mismatch",
+        },
+        body: JSON.stringify({
+          ...request,
+          verificationContract: {
+            version: "1",
+            subject: {
+              repositoryUrl: request.repositoryUrl,
+              resolvedCommitSha: request.resolvedCommitSha,
+              skillHash: request.skill.hash,
+              runtimeImageDigest: `sha256:${"d".repeat(64)}`,
+            },
+            criteria: [{ id: "tests", kind: "test-suite", required: true }],
+            prohibitions: [],
+          },
+        }),
+      });
+      expect(incompatible.status).toBe(202);
+      const incompatibleBody = await incompatible.json() as {
+        run: { id: string };
+      };
+
+      await vi.waitFor(async () => {
+        const response = await fetch(
+          `${apiUrl}/api/runs/${incompatibleBody.run.id}`,
+        );
+        await expect(response.json()).resolves.toMatchObject({
+          status: "SYSTEM_ERROR",
+          verdict: "INCONCLUSIVE",
+          systemError: {
+            code: "RUNTIME_IMAGE_MISMATCH",
+            message:
+              "The configured runtime image does not match the verification contract.",
+            retryable: false,
+          },
+        });
+      });
+      expect(executed).toEqual([body.run.id, queuedBody.run.id]);
     } finally {
       orchestrator.stop();
       await close(runner);

@@ -68,6 +68,60 @@ describe("versioned leased runner service", () => {
     expect(() => service.authenticate(`Bearer ${config.bearerToken}`)).not.toThrow();
   });
 
+  it("rejects an incompatible runtime contract before sandbox execution", async () => {
+    const callback = {
+      heartbeat: vi.fn(async () => ({
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        cancellationRequested: false,
+      })),
+      result: vi.fn(async () => undefined),
+    };
+    const execute = vi.fn(
+      () => new Promise<SandboxExecution>(() => undefined),
+    );
+    const service = new RunnerService(
+      config,
+      {
+        runtimeImageDigest: async () => `sha256:${"c".repeat(64)}`,
+        execute,
+      },
+      callback,
+    );
+    const run = dispatch();
+    run.request = {
+      ...run.request,
+      verificationContract: {
+        version: "1",
+        subject: {
+          repositoryUrl: run.request.repositoryUrl,
+          resolvedCommitSha: run.request.resolvedCommitSha,
+          skillHash: run.request.skill.hash,
+          runtimeImageDigest: `sha256:${"d".repeat(64)}`,
+        },
+        criteria: [{ id: "tests", kind: "test-suite", required: true }],
+        prohibitions: [],
+      },
+    };
+
+    service.dispatch(run);
+
+    await vi.waitFor(() => expect(callback.result).toHaveBeenCalledTimes(1));
+    expect(execute).not.toHaveBeenCalled();
+    expect(callback.result).toHaveBeenCalledWith(
+      run.runId,
+      expect.objectContaining({
+        status: "SYSTEM_ERROR",
+        report: null,
+        systemError: {
+          code: "RUNTIME_IMAGE_MISMATCH",
+          message:
+            "The configured runtime image does not match the verification contract.",
+          retryable: false,
+        },
+      }),
+    );
+  });
+
   it("enforces concurrency one, heartbeat renewal, cancellation, and cleanup handoff", async () => {
     let finish: ((value: SandboxExecution) => void) | undefined;
     const execution = new Promise<SandboxExecution>((resolve) => {
