@@ -35,7 +35,7 @@ export function Footer() {
           <div>
             <p className="text-sm font-bold text-slate-200 mb-4 tracking-wider uppercase">External</p>
             <ul className="space-y-3 text-sm text-slate-300">
-              <li><a href="https://github.com/ever-guild" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">GitHub</a></li>
+              <li><a href="https://github.com/ever-guild/proof-runner" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">GitHub</a></li>
               <li><a href="https://github.com/ever-guild/proof-runner-demo" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">Demo repository</a></li>
               <li><a href="https://ever-guild.net" target="_blank" rel="noreferrer" className="hover:text-violet-300 transition-colors font-medium">Ever Guild</a></li>
             </ul>
