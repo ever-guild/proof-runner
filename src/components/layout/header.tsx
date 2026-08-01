@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ShieldCheck } from "lucide-react"
 import { Button } from "../ui/button"
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 
 export function Header() {
   return (

@@ -9,3 +9,6 @@ coverage/
 *.db-wal
 *.log
 storybook-static/
+
+# This repository uses pnpm as its sole workspace package manager.
+/package-lock.json

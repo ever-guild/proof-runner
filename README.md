@@ -41,7 +41,7 @@ backup, and frozen A2MCP registration samples are in
 
 ## Development
 
-Requires Node.js 22 or newer and pnpm 10.32.1.
+Requires Node.js 22.22.0 or newer and pnpm 10.32.1.
 
 ```sh
 pnpm install --frozen-lockfile

@@ -1,6 +1,6 @@
 import * as React from "react"
 import { AlertCircle, CheckCircle2, FileCheck2, Loader2 } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Button } from "../components/ui/button"

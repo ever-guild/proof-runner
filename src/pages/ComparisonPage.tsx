@@ -1,6 +1,6 @@
 import * as React from "react"
 import { AlertCircle, Copy, Download, Loader2 } from "lucide-react"
-import { useParams } from "react-router-dom"
+import { useParams } from "react-router"
 
 import { ComparisonResults } from "../components/comparison-results"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"

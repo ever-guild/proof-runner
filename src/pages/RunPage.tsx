@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams } from "react-router"
 import { AlertCircle, AlertOctagon, AlertTriangle, CircleCheck, Clock, Copy, Loader2, XCircle } from "lucide-react"
 import { Terminal } from "../components/ui/terminal"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
