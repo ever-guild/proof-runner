@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react"
 import { expect, userEvent, waitFor, within } from "storybook/test"
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom"
+import { Navigate, Route, Routes, useNavigate } from "react-router"
 
 import { ComparisonPage } from "./ComparisonPage"
 import type { ComparisonResult } from "../lib/api"

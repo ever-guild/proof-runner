@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router'
 import { AppLayout } from './components/layout/app-layout'
 import { LandingPage } from './pages/LandingPage'
 import { RunPage } from './pages/RunPage'
