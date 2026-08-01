@@ -7,5 +7,8 @@ allowBuilds:
   # install is reproducible without enabling arbitrary dependency scripts.
   esbuild: true
 overrides:
+  # Older minimatch releases still resolve vulnerable brace-expansion ranges.
+  # Keep the workspace on the first release outside all current advisories.
   brace-expansion: 5.0.8
+  # Storybook's MCP dependency chain currently accepts affected Valibot builds.
   valibot@<=1.4.1: 1.4.2
