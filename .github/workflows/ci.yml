@@ -25,6 +25,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Regression guard for #43: the Corpus package must be able to test
+      # itself right after install, before any other workspace pretest has
+      # had a chance to build receipt/metadata dist/ output on its behalf.
+      - run: pnpm --filter @ever-guild/proof-runner-corpus test
       - run: pnpm exec playwright install --with-deps chromium firefox
       # Keep the root test suite first so workspace bootstrap is exercised from
       # a clean checkout before typecheck or build can populate package dist/.
