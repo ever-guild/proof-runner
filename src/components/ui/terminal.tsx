@@ -60,7 +60,7 @@ const Terminal = React.forwardRef<HTMLDivElement, TerminalProps>(
             }
 
             return (
-              <div key={index} className={colorClass}>
+              <div key={index} className={cn(colorClass, "break-all")}>
                 {log}
               </div>
             );
